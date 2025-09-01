@@ -1,3 +1,7 @@
+## 注意
+
+https://miaogeapi.deno.dev 服务已停止，此签到脚本仅作为 VELOERA 项目的示例模版
+
 ## 多用户签到
 
 - 变量名：VELOERA_CONFIG_JSON
