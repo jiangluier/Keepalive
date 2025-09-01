@@ -289,8 +289,7 @@ class ConfigManager:
         # 默认配置
         defaults = {
             'miaogeapi': {
-                # 'base_url': 'https://miaogeapi.deno.dev',
-                'base_url': 'https://linjinpeng-new-api.hf.space',
+                'base_url': 'https://miaogeapi.deno.dev',
                 'user_id': '159',
                 'checkin_endpoint': '/api/user/check_in',
                 'timeout': 30,
