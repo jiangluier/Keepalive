@@ -62,7 +62,7 @@ curl -X POST \
 
 ### 在uptime通知中设置webhook
 
-- **名称**：填一个易于分辨的词，如 `SAP离线`
+- **名称**：填一个易于分辨的名称，如 `SAP离线`
 - **通知类型**: `Webhook`
 - **Post URL**: `https://<你的Worker地址>?token=<你的密码>&user=<你的用户名>&repo=<你的仓库名>` (请确保此URL完整且正确)
 - **请求体**: 选择 `预设 - application/json` (然后不要在下方出现的任何文本框中填写内容)
