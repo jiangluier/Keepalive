@@ -55,7 +55,7 @@ jobs:
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{ "heartbeat": { "status": 0, "msg": "来自curl的手动测试", "time": "2025-09-16T00:00:00Z" }, "monitor": { "name": "手动验证监控" }, "msg": "这是一条手动验证通知。" }' \
-  "https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>"
+  'https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>'
 ```
 
 ## 完整测试
