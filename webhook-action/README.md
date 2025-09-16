@@ -31,6 +31,20 @@ jobs:
   deploy-and-sync:
     runs-on: ubuntu-latest
     ..............
+
+    steps:
+      - name: Check Trigger Event
+        run: |
+          echo "Workflow triggered by: ${{ github.event_name }}"
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            echo "触发事件类型 (Event Type): ${{ github.event.action }}"
+            echo "收到来自 Uptime Kuma 的下线通知，开始执行自动恢复部署流程..."
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "工作流被手动触发，开始执行部署..."
+          else
+            echo "工作流由计划任务触发，开始执行部署..."
+          fi
+    ..............
 ```
 
 ## 手动测试
