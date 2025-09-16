@@ -67,5 +67,5 @@ curl -X POST \
   - URL: 填写一个肯定存在的网站，例如 `https://www.google.com`
   - 关键字: 填写一个绝对不会在该网站上出现的词，例如 `_这是一个用于测试的绝对不存在的关键字_`
   - 心跳间隔: 为了快速看到结果，可以临时设置为 20 秒。
-- 关联通知渠道：确保您已经将配置好 Webhook URL：`https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>`
+- 关联通知渠道：确保已经配置好 Webhook URL：`https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>`
 - 保存并观察
