@@ -41,7 +41,7 @@ jobs:
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{ "heartbeat": { "status": 0, "msg": "来自curl的手动测试", "time": "2025-09-16T00:00:00Z" }, "monitor": { "name": "手动验证监控" }, "msg": "这是一条手动验证通知。" }' \
-  "[https://<你的Worker地址>?user=<你的GitHub用户名>&repo=<你的仓库名>](https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>)"
+  "https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>"
 ```
 
 ## 完整测试
@@ -53,5 +53,5 @@ curl -X POST \
   - URL: 填写一个肯定存在的网站，例如 `https://www.google.com`
   - 关键字: 填写一个绝对不会在该网站上出现的词，例如 `_这是一个用于测试的绝对不存在的关键字_`
   - 心跳间隔: 为了快速看到结果，可以临时设置为 20 秒。
-- 关联通知渠道：确保您已经将配置好 Webhook URL（指向您Cloudflare Worker并带有正确参数）的通知渠道，添加到了这个新的、临时的监控项上。
+- 关联通知渠道：确保您已经将配置好 Webhook URL：`https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>`
 - 保存并观察
