@@ -58,14 +58,22 @@ curl -X POST \
   'https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>'
 ```
 
-## 完整测试
+## uptime 设置
 
-- 登录 Uptime Kuma
-- 创建一个临时的监控项：
-  - 点击 `添加新的监控项`
-  - 监控项类型选择 `HTTP(s) - 关键字`
-  - URL: 填写一个肯定存在的网站，例如 `https://www.google.com`
-  - 关键字: 填写一个绝对不会在该网站上出现的词，例如 `_这是一个用于测试的绝对不存在的关键字_`
-  - 心跳间隔: 为了快速看到结果，可以临时设置为 20 秒。
-- 关联通知渠道：确保已经配置好 Webhook URL：`https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>`
-- 保存并观察
+### 在uptime通知中设置webhook
+
+- **名称**：填一个易于分辨的词，如 `SAP离线`
+- **通知类型**: `Webhook`
+- **Post URL**: `https://<你的Worker地址>?token=<你的密码>&user=<你的用户名>&repo=<你的仓库名>` (请确保此URL完整且正确)
+- **请求体**: 选择 `预设 - application/json` (然后不要在下方出现的任何文本框中填写内容)
+- **额外 Header**: 保持 `禁用` 状态
+- **保存**
+
+### 修改监控项
+
+- **监控项类型**：选择 `HTTP(s) - 关键字`
+- **URL**: 填写监控的网站，如 `https://webapp.ap21.hana.ondemand.com`
+- **关键字**: 填写一个在网站上必然出现的词，例如 `Hello`（注意大小写）
+- **心跳间隔**: 建议 `3600` 秒，即1小时
+- **通知**：关联刚刚设置的 `SAP离线` 通知
+- **保存**
