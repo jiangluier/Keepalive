@@ -20,6 +20,7 @@ work_dir="/etc/sing-box"
 config_dir="${work_dir}/config.json"
 client_dir="${work_dir}/url.txt"
 pub_key_file="${work_dir}/reality.pub"
+ARGO_PORT="8001"
 
 # 导入外部变量
 # 示例: export VL_PORT=49752 bash <(curl ...)
@@ -30,7 +31,6 @@ export TU_PORT=${TU_PORT:-}
 export HY_PORT=${HY_PORT:-}
 export ARGO_DOMAIN=${ARGO_DOMAIN:-}
 export ARGO_AUTH=${ARGO_AUTH:-}
-export ARGO_PORT=8001
 export CFIP=${CFIP:-'cf.090227.xyz'}
 export CFPORT=${CFPORT:-'8443'}
 export IN_PORT=${IN_PORT:-34766}
