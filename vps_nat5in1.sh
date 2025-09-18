@@ -314,45 +314,6 @@ install_singbox() {
 EOF
 }
 
-# 生成Argo启动命令 (可复用函数)
-generate_argo_command() {
-    local system_type=$1 # 接收 "systemd" 或 "openrc"
-    local argo_cmd=""
-
-    if [[ -n "$ARGO_DOMAIN" && -n "$ARGO_AUTH" ]]; then
-        yellow "检测到ARGO环境变量，启用固定隧道模式"
-        if [[ $ARGO_AUTH =~ TunnelSecret ]]; then
-            # JSON 逻辑
-            echo "$ARGO_AUTH" > "${work_dir}/tunnel.json"
-            local tunnel_id=$(jq -r .TunnelID <<< "$ARGO_AUTH")
-            cat > "${work_dir}/tunnel.yml" << EOF
-tunnel: $tunnel_id
-credentials-file: ${work_dir}/tunnel.json
-protocol: http2
-ingress:
-  - hostname: $ARGO_DOMAIN
-    service: http://localhost:$ARGO_PORT
-    originRequest:
-      noTLSVerify: true
-  - service: http_status:404
-EOF
-            argo_cmd="/etc/sing-box/argo tunnel --edge-ip-version auto --config /etc/sing-box/tunnel.yml run"
-        else
-            argo_cmd="/etc/sing-box/argo tunnel --edge-ip-version auto --no-autoupdate --protocol http2 run --token '$ARGO_AUTH'"
-        fi
-    else
-        yellow "未检测到ARGO环境变量，启用临时隧道模式"
-        argo_cmd="/etc/sing-box/argo tunnel --url http://localhost:$ARGO_PORT --no-autoupdate --edge-ip-version auto --protocol http2 > /etc/sing-box/argo.log 2>&1"
-    fi
-
-    # 根据系统类型，输出最终格式化的命令
-    if [[ "$system_type" == "systemd" ]]; then
-        echo "/bin/sh -c \"$argo_cmd\""
-    elif [[ "$system_type" == "openrc" ]]; then
-        echo "-c '$argo_cmd'"
-    fi
-}
-
 # debian/ubuntu/centos 守护进程
 main_systemd_services() {
     cat > /etc/systemd/system/sing-box.service << EOF
@@ -376,10 +337,30 @@ LimitNOFILE=infinity
 WantedBy=multi-user.target
 EOF
 
-    # 调用 generate_argo_command 函数来动态生成 ExecStart 命令
-    local argo_exec_start=$(generate_argo_command "systemd")
-
-    cat > /etc/systemd/system/argo.service << EOF
+    # 生成 argo.service >>>>>>>>>
+    if [[ -n "$ARGO_DOMAIN" && -n "$ARGO_AUTH" ]]; then
+        yellow "检测到ARGO环境变量，启用固定隧道模式"
+        local argo_exec_start
+        if [[ $ARGO_AUTH =~ TunnelSecret ]]; then
+            echo "$ARGO_AUTH" > "${work_dir}/tunnel.json"
+            tunnel_id=$(jq -r .TunnelID <<< "$ARGO_AUTH")
+            cat > "${work_dir}/tunnel.yml" << EOF
+tunnel: $tunnel_id
+credentials-file: ${work_dir}/tunnel.json
+protocol: http2
+ingress:
+  - hostname: $ARGO_DOMAIN
+    service: http://localhost:$ARGO_PORT
+    originRequest:
+      noTLSVerify: true
+  - service: http_status:404
+EOF
+            argo_exec_start="/etc/sing-box/argo tunnel --edge-ip-version auto --config /etc/sing-box/tunnel.yml run"
+        else
+            argo_exec_start="/etc/sing-box/argo tunnel --edge-ip-version auto --no-autoupdate --protocol http2 run --token '$ARGO_AUTH'"
+        fi
+        
+        cat > /etc/systemd/system/argo.service << EOF
 [Unit]
 Description=Cloudflare Tunnel
 After=network.target
@@ -395,6 +376,27 @@ RestartSec=5s
 [Install]
 WantedBy=multi-user.target
 EOF
+    else
+        yellow "未检测到ARGO环境变量，启用临时隧道模式"
+        cat > /etc/systemd/system/argo.service << EOF
+[Unit]
+Description=Cloudflare Tunnel
+After=network.target
+
+[Service]
+Type=simple
+NoNewPrivileges=yes
+TimeoutStartSec=0
+ExecStart=/etc/sing-box/argo tunnel --url http://localhost:$ARGO_PORT --no-autoupdate --edge-ip-version auto --protocol http2
+StandardOutput=file:/etc/sing-box/argo.log
+StandardError=inherit
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    fi
 
     if [ -f /etc/centos-release ]; then
         yum install -y chrony
@@ -423,8 +425,32 @@ command_background=true
 pidfile="/var/run/sing-box.pid"
 EOF
 
-    # 调用 generate_argo_command 函数来动态生成 command_args
-    local argo_command_args=$(generate_argo_command "openrc")
+    # 生成 argo init 脚本
+    local argo_command_args
+    if [[ -n "$ARGO_DOMAIN" && -n "$ARGO_AUTH" ]]; then
+        yellow "检测到ARGO环境变量，启用固定隧道模式"
+        if [[ $ARGO_AUTH =~ TunnelSecret ]]; then
+            echo "$ARGO_AUTH" > "${work_dir}/tunnel.json"
+            tunnel_id=$(jq -r .TunnelID <<< "$ARGO_AUTH")
+            cat > "${work_dir}/tunnel.yml" << EOF
+tunnel: $tunnel_id
+credentials-file: ${work_dir}/tunnel.json
+protocol: http2
+ingress:
+  - hostname: $ARGO_DOMAIN
+    service: http://localhost:$ARGO_PORT
+    originRequest:
+      noTLSVerify: true
+  - service: http_status:404
+EOF
+            argo_command_args="-c '/etc/sing-box/argo tunnel --edge-ip-version auto --config /etc/sing-box/tunnel.yml run'"
+        else
+            argo_command_args="-c '/etc/sing-box/argo tunnel --edge-ip-version auto --no-autoupdate --protocol http2 run --token '$ARGO_AUTH''"
+        fi
+    else
+        yellow "未检测到ARGO环境变量，启用临时隧道模式"
+        argo_command_args="-c '/etc/sing-box/argo tunnel --url http://localhost:$ARGO_PORT --no-autoupdate --edge-ip-version auto --protocol http2 > /etc/sing-box/argo.log 2>&1'"
+    fi
 
     cat > /etc/init.d/argo << EOF
 #!/sbin/openrc-run
@@ -442,6 +468,7 @@ EOF
     rc-update add argo default > /dev/null 2>&1
 }
 
+## 生成节点
 get_info() {
     clear
     local uuid=$(jq -r '.inbounds[0].users[0].uuid' "$config_dir" 2>/dev/null)
