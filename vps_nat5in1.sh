@@ -75,7 +75,7 @@ manage_packages() {
     for package in "$@"; do
         if [ "$action" == "install" ]; then
             if command -v "$package" &>/dev/null; then
-                green "${package} already installed"
+                green "依赖 ${package} 已安装"
                 continue
             fi
             yellow "正在安装 ${package}..."
@@ -163,18 +163,12 @@ install_singbox() {
     private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
     public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
 
-    # IPv4 规则
-    iptables -F > /dev/null 2>&1 \
-      && iptables -P INPUT ACCEPT > /dev/null 2>&1 \
-      && iptables -P FORWARD ACCEPT > /dev/null 2>&1 \
-      && iptables -P OUTPUT ACCEPT > /dev/null 2>&1
-    
-    # IPv6 规则（先检查 ip6tables 是否存在）
-    command -v ip6tables &> /dev/null \
-      && ip6tables -F > /dev/null 2>&1 \
-      && ip6tables -P INPUT ACCEPT > /dev/null 2>&1 \
-      && ip6tables -P FORWARD ACCEPT > /dev/null 2>&1 \
-      && ip6tables -P OUTPUT ACCEPT > /dev/null 2>&1
+    # 清理防火墙规则
+    {
+        iptables -P INPUT ACCEPT && iptables -P FORWARD ACCEPT && iptables -P OUTPUT ACCEPT && iptables -F
+        command -v ip6tables &>/dev/null && \
+            ip6tables -P INPUT ACCEPT && ip6tables -P FORWARD ACCEPT && ip6tables -P OUTPUT ACCEPT && ip6tables -F
+    } >/dev/null 2>&1
   
     manage_packages uninstall ufw firewalld > /dev/null 2>&1
 
@@ -290,8 +284,8 @@ install_singbox() {
           "api.statsig.com", "browser-intake-datadoghq.com", "cdn.openai.com", "chat.openai.com", "auth.openai.com",
           "chat.openai.com.cdn.cloudflare.net", "ios.chat.openai.com", "o33249.ingest.sentry.io",
           "openai-api.arkoselabs.com", "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net",
-          "openaicomproductionae4b.blob.core.windows.net", "production-openaicom-storage.azureedge.net", "static.cloudflareinsights.com",
-          "gemini.google.com","claude.ai","grok.com"
+          "openaicomproductionae4b.blob.core.windows.net", "production-openaicom-storage.azureedge.net",
+          "static.cloudflareinsights.com"
         ],
         "domain_suffix": [
           ".algolia.net", ".auth0.com", ".chatgpt.com", ".challenges.cloudflare.com", ".client-api.arkoselabs.com",
@@ -300,6 +294,10 @@ install_singbox() {
           ".openaiapi-site.azureedge.net", ".openaicom.imgix.net", ".segment.io", ".sentry.io", ".stripe.com"
         ],
         "domain_keyword": [ "openaicom-api" ],
+        "outbound": "wireguard-ipv6-prefer-out"
+      },
+      {
+        "domain_suffix": [ "gemini.google.com", "claude.ai", "grok.com", "x.com" ],
         "outbound": "wireguard-ipv6-prefer-out"
       }
     ],
@@ -316,14 +314,10 @@ EOF
     if [[ -n "$VL_PORT" ]]; then
         vless_inbound=$(cat <<EOF
 {
-    "tag": "vless-reality-in",
-    "type": "vless",
-    "listen": "::",
-    "listen_port": $VL_PORT,
+    "tag": "vless-reality-in", "type": "vless", "listen": "::", "listen_port": $VL_PORT,
     "users": [ { "uuid": "$uuid", "flow": "xtls-rprx-vision" } ],
     "tls": {
-        "enabled": true,
-        "server_name": "www.iij.ad.jp",
+        "enabled": true, "server_name": "www.iij.ad.jp",
         "reality": {
             "enabled": true,
             "handshake": { "server": "www.iij.ad.jp", "server_port": 443 },
@@ -341,10 +335,7 @@ EOF
     # VMess WS Inbound (Argo) - 总是添加
     vmess_inbound=$(cat <<EOF
 {
-    "tag": "vmess-ws-in",
-    "type": "vmess",
-    "listen": "::",
-    "listen_port": $vmess_argo_port,
+    "tag": "vmess-ws-in", "type": "vmess", "listen": "::", "listen_port": $vmess_argo_port,
     "users": [ { "uuid": "$uuid" } ],
     "transport": { "type": "ws", "path": "/vmess-argo", "early_data_header_name": "Sec-WebSocket-Protocol" }
 }
@@ -356,10 +347,7 @@ EOF
     if [[ -n "$SK_PORT" ]]; then
         socks_inbound=$(cat <<EOF
 {
-    "tag": "socks-in",
-    "type": "socks",
-    "listen": "::",
-    "listen_port": $SK_PORT,
+    "tag": "socks-in", "type": "socks", "listen": "::", "listen_port": $SK_PORT,
     "users": [ { "username": "$socks_user", "password": "$socks_pass" } ]
 }
 EOF
@@ -371,15 +359,9 @@ EOF
     if [[ -n "$HY_PORT" ]]; then
         hy2_inbound=$(cat <<EOF
 {
-    "tag": "hysteria2-in",
-    "type": "hysteria2",
-    "listen": "::",
-    "listen_port": $HY_PORT,
-    "sniff": true,
-    "sniff_override_destination": false,
-    "users": [ { "password": "$uuid" } ],
-    "ignore_client_bandwidth": false,
-    "masquerade": "https://bing.com",
+    "tag": "hysteria2-in", "type": "hysteria2", "listen": "::", "listen_port": $HY_PORT,
+    "sniff": true, "sniff_override_destination": false,
+    "users": [ { "password": "$uuid" } ], "ignore_client_bandwidth": false, "masquerade": "https://bing.com",
     "tls": {
         "enabled": true, "alpn": [ "h3" ], "min_version": "1.3", "max_version": "1.3",
         "certificate_path": "$work_dir/cert.pem", "key_path": "$work_dir/private.key"
@@ -394,12 +376,8 @@ EOF
     if [[ -n "$TU_PORT" ]]; then
         tuic_inbound=$(cat <<EOF
 {
-    "tag": "tuic-in",
-    "type": "tuic",
-    "listen": "::",
-    "listen_port": $TU_PORT,
-    "users": [ { "uuid": "$uuid", "password": "$password" } ],
-    "congestion_control": "bbr",
+    "tag": "tuic-in", "type": "tuic", "listen": "::", "listen_port": $TU_PORT,
+    "users": [ { "uuid": "$uuid", "password": "$password" } ], "congestion_control": "bbr",
     "tls": {
         "enabled": true, "alpn": [ "h3" ],
         "certificate_path": "$work_dir/cert.pem", "key_path": "$work_dir/private.key"
@@ -804,11 +782,9 @@ change_config() {
                 [ -z "$new_port" ] && new_port=$(shuf -i 10000-65000 -n 1)
                 
                 # 重新生成一份该节点的配置并插入
-                # 为了简化，这里直接调用初次安装的逻辑，需要准备好所有变量
                 uuid=$(jq -r '.inbounds[0].users[0].uuid' "$config_dir")
                 password=$(< /dev/urandom tr -dc 'A-Za-z0-9' | head -c 24)
-                private_key=$(jq -r '.inbounds[] | select(.type == "vless") | .tls.reality.private_key // ""' "$config_dir" | head -n1)
-                if [[ -z "$private_key" && "$type" == "vless" ]]; then
+                if [[ "$type" == "vless" ]]; then
                     output=$(/etc/sing-box/sing-box generate reality-keypair)
                     private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
                     public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
@@ -1115,7 +1091,7 @@ menu() {
    check_argo_status=$(check_argo)
    clear
    echo ""
-   purple "=== 老王sing-box一键安装脚本 (定制版) ===\n"
+   purple "=== sing-box一键安装脚本nat版 (基于老王四合一脚本) ===\n"
    purple "---Argo--- 状态: ${check_argo_status}"
    purple "---singbox--- 状态: ${check_singbox_status}\n"
    green "1. 安装sing-box"
