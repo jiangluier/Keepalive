@@ -272,7 +272,7 @@ install_singbox() {
     { "tag": "direct", "type": "direct" },
     { "tag": "block", "type": "block" },
     {
-      "tag": "warp-out",
+      "tag": "wireguard-out",
       "type": "wireguard",
       "server": "engage.cloudflareclient.com",
       "server_port": 2408,
