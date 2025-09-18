@@ -23,7 +23,7 @@ pub_key_file="${work_dir}/reality.pub"
 
 # 导入外部变量
 # 示例: export VL_PORT=49752 bash <(curl ...)
-export UUID="${UUID:-$(cat /proc/sys/kernel/random/uuid)}"
+export UUID=${UUID:-}
 export VL_PORT=${VL_PORT:-}
 export SK_PORT=${SK_PORT:-}
 export TU_PORT=${TU_PORT:-}
@@ -34,10 +34,6 @@ export ARGO_PORT=8001
 export CFIP=${CFIP:-'cf.090227.xyz'}
 export CFPORT=${CFPORT:-'8443'}
 export IN_PORT=${IN_PORT:-34766}
-vless_prot=${IN_PORT}
-socks_port=$((vless_prot + 1))
-tuic_port=$((vless_prot + 2))
-hy2_port=$((vless_prot + 3))
 socks_user="yutian"
 socks_pass="yutian=abcd"
 
@@ -120,172 +116,112 @@ get_realip() {
     fi
 }
 
-# 下载并安装 sing-box,cloudflared
+allow_port() {
+    has_ufw=0
+    has_firewalld=0
+    has_iptables=0
+    has_ip6tables=0
+
+    command_exists ufw && has_ufw=1
+    command_exists firewall-cmd && systemctl is-active firewalld >/dev/null 2>&1 && has_firewalld=1
+    command_exists iptables && has_iptables=1
+    command_exists ip6tables && has_ip6tables=1
+
+    # 出站和基础规则
+    [ "$has_ufw" -eq 1 ] && ufw --force default allow outgoing >/dev/null 2>&1
+    [ "$has_firewalld" -eq 1 ] && firewall-cmd --permanent --zone=public --set-target=ACCEPT >/dev/null 2>&1
+    [ "$has_iptables" -eq 1 ] && {
+        iptables -C INPUT -i lo -j ACCEPT 2>/dev/null || iptables -I INPUT 3 -i lo -j ACCEPT
+        iptables -C INPUT -p icmp -j ACCEPT 2>/dev/null || iptables -I INPUT 4 -p icmp -j ACCEPT
+        iptables -P FORWARD DROP 2>/dev/null || true
+        iptables -P OUTPUT ACCEPT 2>/dev/null || true
+    }
+    [ "$has_ip6tables" -eq 1 ] && {
+        ip6tables -C INPUT -i lo -j ACCEPT 2>/dev/null || ip6tables -I INPUT 3 -i lo -j ACCEPT
+        ip6tables -C INPUT -p icmp -j ACCEPT 2>/dev/null || ip6tables -I INPUT 4 -p icmp -j ACCEPT
+        ip6tables -P FORWARD DROP 2>/dev/null || true
+        ip6tables -P OUTPUT ACCEPT 2>/dev/null || true
+    }
+
+    # 入站
+    for rule in "$@"; do
+        port=${rule%/*}
+        proto=${rule#*/}
+        [ "$has_ufw" -eq 1 ] && ufw allow in ${port}/${proto} >/dev/null 2>&1
+        [ "$has_firewalld" -eq 1 ] && firewall-cmd --permanent --add-port=${port}/${proto} >/dev/null 2>&1
+        [ "$has_iptables" -eq 1 ] && (iptables -C INPUT -p ${proto} --dport ${port} -j ACCEPT 2>/dev/null || iptables -I INPUT 4 -p ${proto} --dport ${port} -j ACCEPT)
+        [ "$has_ip6tables" -eq 1 ] && (ip6tables -C INPUT -p ${proto} --dport ${port} -j ACCEPT 2>/dev/null || ip6tables -I INPUT 4 -p ${proto} --dport ${port} -j ACCEPT)
+    done
+
+    [ "$has_firewalld" -eq 1 ] && firewall-cmd --reload >/dev/null 2>&1
+
+    # 规则持久化
+    if command_exists rc-service 2>/dev/null; then
+        [ "$has_iptables" -eq 1 ] && iptables-save > /etc/iptables/rules.v4 2>/dev/null
+        [ "$has_ip6tables" -eq 1 ] && ip6tables-save > /etc/iptables/rules.v6 2>/dev/null
+    else
+        if ! command_exists netfilter-persistent; then
+            manage_packages install iptables-persistent || yellow "请手动安装netfilter-persistent或保存iptables规则" 
+            netfilter-persistent save >/dev/null 2>&1
+        elif command_exists service; then
+            service iptables save 2>/dev/null
+            service ip6tables save 2>/dev/null
+        fi
+    fi
+}
+
+# 下载并安装 sing-box 和 argo
 install_singbox() {
     clear
     purple "正在安装 sing-box 中，请稍后..."
     ARCH_RAW=$(uname -m)
     case "${ARCH_RAW}" in
-        'x86_64') ARCH='amd64' ;;
-        'x86' | 'i686' | 'i386') ARCH='386' ;;
-        'aarch64' | 'arm64') ARCH='arm64' ;;
-        'armv7l') ARCH='armv7' ;;
-        's390x') ARCH='s390x' ;;
-        *) red "不支持的架构: ${ARCH_RAW}"; exit 1 ;;
+        'x86_64') ARCH='amd64';;
+        'aarch64' | 'arm64') ARCH='arm64';;
+        *) red "不支持的架构: ${ARCH_RAW}"; exit 1;;
     esac
     
-    [ ! -d "${work_dir}" ] && mkdir -p "${work_dir}"
+    mkdir -p "${work_dir}"
     curl -sLo "${work_dir}/sing-box" "https://$ARCH.ssss.nyc.mn/sbx"
     curl -sLo "${work_dir}/argo" "https://$ARCH.ssss.nyc.mn/bot"
     chmod +x "${work_dir}/sing-box" "${work_dir}/argo"
 
-    password=$(< /dev/urandom tr -dc 'A-Za-z0-9' | head -c 24)
-    output=$("${work_dir}/sing-box" generate reality-keypair)
-    private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
-    public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
+    # 生成凭证
+    local uuid="${UUID:-$(cat /proc/sys/kernel/random/uuid)}"
+    local password=$(head -c 16 /dev/urandom | base64)
+    local output=$("${work_dir}/sing-box" generate reality-keypair)
+    local private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
+    local public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
     echo "${public_key}" > "${pub_key_file}"
+    
+    # 放行端口
+    allow_port $vless_port/tcp $nginx_port/tcp $tuic_port/udp $hy2_port/udp > /dev/null 2>&1
 
-    {
-        iptables -P INPUT ACCEPT && iptables -P FORWARD ACCEPT && iptables -P OUTPUT ACCEPT && iptables -F
-        command -v ip6tables &>/dev/null && ip6tables -P INPUT ACCEPT && ip6tables -P FORWARD ACCEPT && ip6tables -P OUTPUT ACCEPT && ip6tables -F
-    } >/dev/null 2>&1
-    manage_packages uninstall ufw firewalld > /dev/null 2>&1
-
+    # 生成自签名证书
     openssl ecparam -genkey -name prime256v1 -out "${work_dir}/private.key"
     openssl req -new -x509 -days 3650 -key "${work_dir}/private.key" -out "${work_dir}/cert.pem" -subj "/CN=bing.com"
 
     # 检测网络类型并设置DNS策略
     dns_strategy=$(ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1 && echo "prefer_ipv4" || (ping -c 1 -W 3 2001:4860:4860::8888 >/dev/null 2>&1 && echo "prefer_ipv6" || echo "prefer_ipv4"))
 
-   # 生成配置文件
-cat > "${config_dir}" << EOF
+    # 写入基础配置文件
+    cat > "${config_dir}" << EOF
 {
-  "log": {
-    "disabled": false,
-    "level": "error",
-    "output": "$work_dir/sb.log",
-    "timestamp": true
-  },
-  "dns": {
-    "servers": [
-      {
-        "tag": "local",
-        "address": "local",
-        "strategy": "$dns_strategy"
-      }
-    ]
-  },
-  "ntp": {
-    "enabled": true,
-    "server": "time.apple.com",
-    "server_port": 123,
-    "interval": "30m"
-  },
-  "inbounds": [
-    {
-      "type": "vless",
-      "tag": "vless-reality",
-      "listen": "::",
-      "listen_port": $vless_port,
-      "users": [
-        {
-          "uuid": "$uuid",
-          "flow": "xtls-rprx-vision"
-        }
-      ],
-      "tls": {
-        "enabled": true,
-        "server_name": "www.iij.ad.jp",
-        "reality": {
-          "enabled": true,
-          "handshake": {
-            "server": "www.iij.ad.jp",
-            "server_port": 443
-          },
-          "private_key": "$private_key",
-          "short_id": [""]
-        }
-      }
-    },
-    {
-      "type": "vmess",
-      "tag": "vmess-ws",
-      "listen": "::",
-      "listen_port": $ARGO_PORT,
-      "users": [
-        {
-          "uuid": "$uuid"
-        }
-      ],
-      "transport": {
-        "type": "ws",
-        "path": "/vmess-argo",
-        "early_data_header_name": "Sec-WebSocket-Protocol"
-      }
-    },
-    {
-      "type": "hysteria2",
-      "tag": "hysteria2",
-      "listen": "::",
-      "listen_port": $hy2_port,
-      "users": [
-        {
-          "password": "$uuid"
-        }
-      ],
-      "ignore_client_bandwidth": false,
-      "masquerade": "https://bing.com",
-      "tls": {
-        "enabled": true,
-        "alpn": ["h3"],
-        "min_version": "1.3",
-        "max_version": "1.3",
-        "certificate_path": "$work_dir/cert.pem",
-        "key_path": "$work_dir/private.key"
-      }
-    },
-    {
-      "type": "tuic",
-      "tag": "tuic",
-      "listen": "::",
-      "listen_port": $tuic_port,
-      "users": [
-        {
-          "uuid": "$uuid",
-          "password": "$password"
-        }
-      ],
-      "congestion_control": "bbr",
-      "tls": {
-        "enabled": true,
-        "alpn": ["h3"],
-        "certificate_path": "$work_dir/cert.pem",
-        "key_path": "$work_dir/private.key"
-      }
-    }
-  ],
+  "log": { "level": "info", "output": "/etc/sing-box/sb.log", "timestamp": true },
+  "dns": { "servers": [{ "tag": "local", "address": "local", "strategy": "$dns_strategy" }] },
+  "ntp": { "enabled": true, "server": "time.apple.com", "server_port": 123, "interval": "30m" },  
+  "inbounds": [],
   "outbounds": [
+    { "tag": "direct", "type": "direct" },
+    { "tag": "block", "type": "block" },
     {
-      "type": "direct",
-      "tag": "direct"
-    },
-    {
-      "type": "block",
-      "tag": "block"
-    },
-    {
+      "tag": "warp-out",
       "type": "wireguard",
-      "tag": "wireguard-out",
       "server": "engage.cloudflareclient.com",
       "server_port": 2408,
-      "local_address": [
-        "172.16.0.2/32",
-        "2606:4700:110:851f:4da3:4e2c:cdbf:2ecf/128"
-      ],
-      "private_key": "eAx8o6MJrH4KE7ivPFFCa4qvYw5nJsYHCBQXPApQX1A=",
-      "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-      "reserved": [82, 90, 51],
-      "mtu": 1420
+      "local_address": [ "172.16.0.2/32", "2606:4700:110:812a:4929:7d2a:af62:351c/128" ],
+      "private_key": "gBthRjevHDGyV0KvYwYE52NIPy29sSrVr6rcQtYNcXA=",
+      "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
     }
   ],
   "route": {
@@ -307,6 +243,10 @@ cat > "${config_dir}" << EOF
     ],
     "rules": [
       {
+        "domain_suffix": ["gemini.google.com", "grok.com"],
+        "outbound": "wireguard-out"
+      },
+      {
         "rule_set": ["openai", "netflix"],
         "outbound": "wireguard-out"
       }
@@ -315,32 +255,36 @@ cat > "${config_dir}" << EOF
   }
 }
 EOF
-}
 
+    # --- 动态添加入站规则 ---
     if [[ -n "$VL_PORT" ]]; then
-        jq --argjson port "$vless_port" --arg uuid "$UUID" --arg pk "$private_key" \
+        local vless_port=${IN_PORT}
+        jq --argjson port "$vless_port" --arg uuid "$uuid" --arg pk "$private_key" \
         '.inbounds += [{"type":"vless","tag":"vless-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":$pk}}}]' \
         "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
 
-    jq --argjson port "$ARGO_PORT" --arg uuid "$UUID" \
+    jq --argjson port "$ARGO_PORT" --arg uuid "$uuid" \
     '.inbounds += [{"type":"vmess","tag":"vmess-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid}],"transport":{"type":"ws","path":"/vmess-argo"}}}]' \
     "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
-
+    
     if [[ -n "$SK_PORT" ]]; then
-        jq --argjson port "$socks5_port" --arg user "$socks_uesr" --arg pass "$socks_pass" \
+        local socks_port=$((IN_PORT + 1))
+        jq --argjson port "$socks_port" --arg user "$socks_user" --arg pass "$socks_user" \
         '.inbounds += [{"type":"socks","tag":"socks-in","listen":"::","listen_port":$port,"users":[{"username":$user,"password":$pass}]}]' \
         "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
 
     if [[ -n "$HY_PORT" ]]; then
-        jq --argjson port "$hy2_port" --arg uuid "$UUID" \
+        local hy2_port=$((IN_PORT + 3))
+        jq --argjson port "$hy2_port" --arg uuid "$uuid" \
         '.inbounds += [{"type":"hysteria2","tag":"hysteria2-in","listen":"::","listen_port":$port,"users":[{"password":$uuid}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}}]' \
         "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
 
     if [[ -n "$TU_PORT" ]]; then
-        jq --argjson port "$tuic_port" --arg uuid "$UUID" --arg pass "$password" \
+        local tuic_port=$((IN_PORT + 2))
+        jq --argjson port "$tuic_port" --arg uuid "$uuid" --arg pass "$password" \
         '.inbounds += [{"type":"tuic","tag":"tuic-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"password":$pass}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}}]' \
         "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
