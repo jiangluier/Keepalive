@@ -322,7 +322,6 @@ EOF
             "enabled": true,
             "handshake": { "server": "www.iij.ad.jp", "server_port": 443 },
             "private_key": "$private_key",
-            "public_key": "$public_key",
             "short_id": [ "" ]
         }
     }
