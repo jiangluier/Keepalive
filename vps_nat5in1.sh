@@ -360,6 +360,7 @@ main_systemd_services() {
 Description=sing-box service
 Documentation=https://sing-box.sagernet.org
 After=network.target nss-lookup.target
+
 [Service]
 User=root
 WorkingDirectory=/etc/sing-box
@@ -370,16 +371,19 @@ ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=10
 LimitNOFILE=infinity
+
 [Install]
 WantedBy=multi-user.target
 EOF
 
+    # 调用 generate_argo_command 函数来动态生成 ExecStart 命令
     local argo_exec_start=$(generate_argo_command "systemd")
 
     cat > /etc/systemd/system/argo.service << EOF
 [Unit]
 Description=Cloudflare Tunnel
 After=network.target
+
 [Service]
 Type=simple
 NoNewPrivileges=yes
@@ -387,26 +391,31 @@ TimeoutStartSec=0
 ExecStart=${argo_exec_start}
 Restart=on-failure
 RestartSec=5s
+
 [Install]
 WantedBy=multi-user.target
 EOF
 
     if [ -f /etc/centos-release ]; then
         yum install -y chrony
-        systemctl start chronyd && systemctl enable chronyd
+        systemctl start chronyd
+        systemctl enable chronyd
         chronyc -a makestep
         yum update -y ca-certificates
         bash -c 'echo "0 0" > /proc/sys/net/ipv4/ping_group_range'
     fi
-    systemctl daemon-reload
-    systemctl enable --now sing-box
-    systemctl enable --now argo
+    systemctl daemon-reload 
+    systemctl enable sing-box
+    systemctl start sing-box
+    systemctl enable argo
+    systemctl start argo
 }
 
 # 适配alpine 守护进程
 alpine_openrc_services() {
     cat > /etc/init.d/sing-box << 'EOF'
 #!/sbin/openrc-run
+
 description="sing-box service"
 command="/etc/sing-box/sing-box"
 command_args="run -c /etc/sing-box/config.json"
@@ -414,10 +423,12 @@ command_background=true
 pidfile="/var/run/sing-box.pid"
 EOF
 
+    # 调用 generate_argo_command 函数来动态生成 command_args
     local argo_command_args=$(generate_argo_command "openrc")
 
     cat > /etc/init.d/argo << EOF
 #!/sbin/openrc-run
+
 description="Cloudflare Tunnel"
 command="/bin/sh"
 command_args="${argo_command_args}"
@@ -425,9 +436,10 @@ command_background=true
 pidfile="/var/run/argo.pid"
 EOF
 
-    chmod +x /etc/init.d/sing-box /etc/init.d/argo
-    rc-update add sing-box default
-    rc-update add argo default
+    chmod +x /etc/init.d/sing-box
+    chmod +x /etc/init.d/argo
+    rc-update add sing-box default > /dev/null 2>&1
+    rc-update add argo default > /dev/null 2>&1
 }
 
 get_info() {
