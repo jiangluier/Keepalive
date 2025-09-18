@@ -277,7 +277,7 @@ EOF
     "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     
     if [[ -n "$SK_PORT" ]]; then
-        jq --argjson port "$socks_port" --arg user "$socks_user" --arg pass "$socks_user" \
+        jq --argjson port "$socks_port" --arg user "$socks_user" --arg pass "$socks_pass" \
         '.inbounds += [{"type":"socks","tag":"socks-in","listen":"::","listen_port":$port,"users":[{"username":$user,"password":$pass}]}]' \
         "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
