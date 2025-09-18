@@ -34,11 +34,14 @@ export ARGO_PORT=8001
 export CFIP=${CFIP:-'cf.090227.xyz'}
 export CFPORT=${CFPORT:-'8443'}
 export IN_PORT=${IN_PORT:-34766}
-socks_user="yutian"
-socks_pass="yutian=abcd"
 
 # 检查是否为root下运行
 [[ $EUID -ne 0 ]] && red "请在root用户下运行脚本" && exit 1
+
+# 检查命令是否存在函数
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
 
 # 检查 sing-box 是否已安装
 check_singbox() {
@@ -189,13 +192,19 @@ install_singbox() {
     # 生成凭证
     local uuid="${UUID:-$(cat /proc/sys/kernel/random/uuid)}"
     local password=$(head -c 16 /dev/urandom | base64)
+    local vless_port=${IN_PORT}
+    local socks_port=$((IN_PORT + 1))
+    local tuic_port=$((IN_PORT + 2))
+    local hy2_port=$((IN_PORT + 3))
+    local socks_user="yutian"
+    local socks_pass="yutian=abcd"
     local output=$("${work_dir}/sing-box" generate reality-keypair)
     local private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
     local public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
     echo "${public_key}" > "${pub_key_file}"
     
     # 放行端口
-    allow_port $vless_port/tcp $nginx_port/tcp $tuic_port/udp $hy2_port/udp > /dev/null 2>&1
+    allow_port $vless_port/tcp $socks_port/tcp $tuic_port/udp $hy2_port/udp > /dev/null 2>&1
 
     # 生成自签名证书
     openssl ecparam -genkey -name prime256v1 -out "${work_dir}/private.key"
@@ -258,7 +267,6 @@ EOF
 
     # --- 动态添加入站规则 ---
     if [[ -n "$VL_PORT" ]]; then
-        local vless_port=${IN_PORT}
         jq --argjson port "$vless_port" --arg uuid "$uuid" --arg pk "$private_key" \
         '.inbounds += [{"type":"vless","tag":"vless-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":$pk}}}]' \
         "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
@@ -269,21 +277,18 @@ EOF
     "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     
     if [[ -n "$SK_PORT" ]]; then
-        local socks_port=$((IN_PORT + 1))
         jq --argjson port "$socks_port" --arg user "$socks_user" --arg pass "$socks_user" \
         '.inbounds += [{"type":"socks","tag":"socks-in","listen":"::","listen_port":$port,"users":[{"username":$user,"password":$pass}]}]' \
         "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
 
     if [[ -n "$HY_PORT" ]]; then
-        local hy2_port=$((IN_PORT + 3))
         jq --argjson port "$hy2_port" --arg uuid "$uuid" \
         '.inbounds += [{"type":"hysteria2","tag":"hysteria2-in","listen":"::","listen_port":$port,"users":[{"password":$uuid}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}}]' \
         "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
 
     if [[ -n "$TU_PORT" ]]; then
-        local tuic_port=$((IN_PORT + 2))
         jq --argjson port "$tuic_port" --arg uuid "$uuid" --arg pass "$password" \
         '.inbounds += [{"type":"tuic","tag":"tuic-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"password":$pass}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}}]' \
         "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
