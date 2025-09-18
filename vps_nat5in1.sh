@@ -65,7 +65,7 @@ fi
 #根据系统类型安装、卸载依赖
 manage_packages() {
     if [ $# -lt 2 ]; then
-        red "Unspecified package name or action"
+        red "未指定的包名称或操作"
         return 1
     fi
 
@@ -328,6 +328,7 @@ EOF
             "enabled": true,
             "handshake": { "server": "www.iij.ad.jp", "server_port": 443 },
             "private_key": "$private_key",
+            "public_key": "$public_key",
             "short_id": [ "" ]
         }
     }
@@ -852,14 +853,14 @@ EOF
             
             # 使用jq更新所有inbound中的uuid和password(hysteria2)
             jq --arg u "$new_uuid" '
-            .inbounds = [
-                .inbounds[] | 
-                if .users then .users = [
-                    .users[] | 
-                    if .uuid then .uuid = $u else . end |
-                    if .password and (.password | length > 20) then .password = $u else . end
-                ] else . end
-            ]' "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
+                .inbounds = [
+                    .inbounds[] | 
+                    if .users then .users = [
+                        .users[] | 
+                        if .uuid then .uuid = $u else . end |
+                        if .password and (.password | length > 20) then .password = $u else . end
+                    ] else . end
+                ]' "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
 
             restart_singbox
             get_info
@@ -874,13 +875,13 @@ EOF
                 "1") new_sni="www.joom.com" ;;
                 "2") new_sni="www.stengg.com" ;;
                 "3") new_sni="www.wedgehr.com" ;;
-                "4) new_sni="www.cerebrium.ai" ;;
+                "4") new_sni="www.cerebrium.ai" ;;
                 "5") new_sni="www.nazhumi.com" ;;
             esac
             jq --arg new_sni "$new_sni" '
-            (.inbounds[] | select(.type == "vless") | .tls.server_name) = $new_sni |
-            (.inbounds[] | select(.type == "vless") | .tls.reality.handshake.server) = $new_sni
-            ' "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
+                (.inbounds[] | select(.type == "vless") | .tls.server_name) = $new_sni |
+                (.inbounds[] | select(.type == "vless") | .tls.reality.handshake.server) = $new_sni
+                ' "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
             restart_singbox
             get_info
             green "\nReality SNI已修改为：${purple}${new_sni}${re}\n"
@@ -1151,7 +1152,7 @@ while true; do
                     sleep 3
                     continue
                 fi
-                manage_packages install jq tar openssl iptables
+                manage_packages install jq tar curl openssl iptables
                 [ -n "$(curl -s --max-time 2 ipv6.ip.sb)" ] && manage_packages install ip6tables
                 install_singbox
 
