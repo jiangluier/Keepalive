@@ -398,8 +398,8 @@ cat > "${config_dir}" << EOF
         "domain": [
           "api.statsig.com","browser-intake-datadoghq.com","cdn.openai.com","chat.openai.com","auth.openai.com",
           "chat.openai.com.cdn.cloudflare.net","ios.chat.openai.com","o33249.ingest.sentry.io","openai-api.arkoselabs.com",
-          "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net","openaicomproductionae4b.blob.core.windows.net","production-openaicom-storage.azureedge.net",
-          "static.cloudflareinsights.com","gemini.google.com","claude.ai","grok.com"
+          "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net","openaicomproductionae4b.blob.core.windows.net",
+		  "production-openaicom-storage.azureedge.net","static.cloudflareinsights.com"
         ],
         "domain_suffix": [
           ".algolia.net",".auth0.com",".chatgpt.com",".challenges.cloudflare.com",".client-api.arkoselabs.com",".events.statsigapi.net",
@@ -407,6 +407,10 @@ cat > "${config_dir}" << EOF
           ".observeit.net",".openai.com",".openaiapi-site.azureedge.net",".openaicom.imgix.net",".segment.io",".sentry.io",".stripe.com"
         ],
         "domain_keyword": [ "openaicom-api" ],
+        "outbound": "wireguard-ipv6-prefer-out"
+      },
+      {
+        "domain_suffix": [ "gemini.google.com", "claude.ai", "grok.com", "x.com" ],
         "outbound": "wireguard-ipv6-prefer-out"
       }
     ],
