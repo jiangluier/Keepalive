@@ -22,17 +22,24 @@ client_dir="${work_dir}/url.txt"
 pub_key_file="${work_dir}/reality.pub"
 
 # 导入外部变量
-# 示例: export VL_OUT_PORT=49752 bash <(curl ...)
-export VL_OUT_PORT=${VL_OUT_PORT:-}
-export SK_OUT_PORT=${SK_OUT_PORT:-}
-export TU_OUT_PORT=${TU_OUT_PORT:-}
-export HY_OUT_PORT=${HY_OUT_PORT:-}
-export BASE_IN_PORT=${BASE_IN_PORT:-34766}
+# 示例: export VL_PORT=49752 bash <(curl ...)
+export UUID="${UUID:-$(cat /proc/sys/kernel/random/uuid)}"
+export VL_PORT=${VL_PORT:-}
+export SK_PORT=${SK_PORT:-}
+export TU_PORT=${TU_PORT:-}
+export HY_PORT=${HY_PORT:-}
 export ARGO_DOMAIN=${ARGO_DOMAIN:-}
 export ARGO_AUTH=${ARGO_AUTH:-}
-export vmess_argo_port=8001
+export ARGO_PORT=8001
 export CFIP=${CFIP:-'cf.090227.xyz'}
 export CFPORT=${CFPORT:-'8443'}
+export IN_PORT=${IN_PORT:-34766}
+vless_prot=${IN_PORT}
+socks_port=$((vless_prot + 1))
+tuic_port=$((vless_prot + 2))
+hy2_port=$((vless_prot + 3))
+socks_user="yutian"
+socks_pass="yutian=abcd"
 
 # 检查是否为root下运行
 [[ $EUID -ne 0 ]] && red "请在root用户下运行脚本" && exit 1
@@ -132,9 +139,6 @@ install_singbox() {
     curl -sLo "${work_dir}/argo" "https://$ARCH.ssss.nyc.mn/bot"
     chmod +x "${work_dir}/sing-box" "${work_dir}/argo"
 
-    socks_user="yutian"
-    socks_pass="yutian=abcd"
-    uuid=$(cat /proc/sys/kernel/random/uuid)
     password=$(< /dev/urandom tr -dc 'A-Za-z0-9' | head -c 24)
     output=$("${work_dir}/sing-box" generate reality-keypair)
     private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
@@ -150,117 +154,195 @@ install_singbox() {
     openssl ecparam -genkey -name prime256v1 -out "${work_dir}/private.key"
     openssl req -new -x509 -days 3650 -key "${work_dir}/private.key" -out "${work_dir}/cert.pem" -subj "/CN=bing.com"
 
-    cat > "${config_dir}" << EOF
+    # 检测网络类型并设置DNS策略
+    dns_strategy=$(ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1 && echo "prefer_ipv4" || (ping -c 1 -W 3 2001:4860:4860::8888 >/dev/null 2>&1 && echo "prefer_ipv6" || echo "prefer_ipv4"))
+
+   # 生成配置文件
+cat > "${config_dir}" << EOF
 {
   "log": {
     "disabled": false,
-    "level": "info",
-    "output": "/etc/sing-box/sb.log",
+    "level": "error",
+    "output": "$work_dir/sb.log",
     "timestamp": true
   },
   "dns": {
-    "servers": [ { "tag": "google", "address": "tls://8.8.8.8" } ]
+    "servers": [
+      {
+        "tag": "local",
+        "address": "local",
+        "strategy": "$dns_strategy"
+      }
+    ]
   },
-  "inbounds": [],
+  "ntp": {
+    "enabled": true,
+    "server": "time.apple.com",
+    "server_port": 123,
+    "interval": "30m"
+  },
+  "inbounds": [
+    {
+      "type": "vless",
+      "tag": "vless-reality",
+      "listen": "::",
+      "listen_port": $vless_port,
+      "users": [
+        {
+          "uuid": "$uuid",
+          "flow": "xtls-rprx-vision"
+        }
+      ],
+      "tls": {
+        "enabled": true,
+        "server_name": "www.iij.ad.jp",
+        "reality": {
+          "enabled": true,
+          "handshake": {
+            "server": "www.iij.ad.jp",
+            "server_port": 443
+          },
+          "private_key": "$private_key",
+          "short_id": [""]
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "vmess-ws",
+      "listen": "::",
+      "listen_port": $ARGO_PORT,
+      "users": [
+        {
+          "uuid": "$uuid"
+        }
+      ],
+      "transport": {
+        "type": "ws",
+        "path": "/vmess-argo",
+        "early_data_header_name": "Sec-WebSocket-Protocol"
+      }
+    },
+    {
+      "type": "hysteria2",
+      "tag": "hysteria2",
+      "listen": "::",
+      "listen_port": $hy2_port,
+      "users": [
+        {
+          "password": "$uuid"
+        }
+      ],
+      "ignore_client_bandwidth": false,
+      "masquerade": "https://bing.com",
+      "tls": {
+        "enabled": true,
+        "alpn": ["h3"],
+        "min_version": "1.3",
+        "max_version": "1.3",
+        "certificate_path": "$work_dir/cert.pem",
+        "key_path": "$work_dir/private.key"
+      }
+    },
+    {
+      "type": "tuic",
+      "tag": "tuic",
+      "listen": "::",
+      "listen_port": $tuic_port,
+      "users": [
+        {
+          "uuid": "$uuid",
+          "password": "$password"
+        }
+      ],
+      "congestion_control": "bbr",
+      "tls": {
+        "enabled": true,
+        "alpn": ["h3"],
+        "certificate_path": "$work_dir/cert.pem",
+        "key_path": "$work_dir/private.key"
+      }
+    }
+  ],
   "outbounds": [
-    { "type": "direct", "tag": "direct" },
-    { "type": "wireguard", "tag": "wireguard-out", "server": "engage.cloudflareclient.com", "server_port": 2408, "local_address": [ "172.16.0.2/32", "2606:4700:110:812a:4929:7d2a:af62:351c/128" ], "private_key": "gBthRjevHDGyV0KvYwYE52NIPy29sSrVr6rcQtYNcXA=", "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=", "reserved": [ 6, 146, 6 ] }
+    {
+      "type": "direct",
+      "tag": "direct"
+    },
+    {
+      "type": "block",
+      "tag": "block"
+    },
+    {
+      "type": "wireguard",
+      "tag": "wireguard-out",
+      "server": "engage.cloudflareclient.com",
+      "server_port": 2408,
+      "local_address": [
+        "172.16.0.2/32",
+        "2606:4700:110:851f:4da3:4e2c:cdbf:2ecf/128"
+      ],
+      "private_key": "eAx8o6MJrH4KE7ivPFFCa4qvYw5nJsYHCBQXPApQX1A=",
+      "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+      "reserved": [82, 90, 51],
+      "mtu": 1420
+    }
   ],
   "route": {
     "rule_set": [
       {
-        "tag": "geosite-netflix",
+        "tag": "openai",
         "type": "remote",
         "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-netflix.srs",
-        "update_interval": "1d"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geosite/openai.srs",
+        "download_detour": "direct"
       },
       {
-        "tag": "geosite-openai",
+        "tag": "netflix",
         "type": "remote",
         "format": "binary",
-        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/openai.srs",
-        "update_interval": "1d"
+        "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo-lite/geosite/netflix.srs",
+        "download_detour": "direct"
       }
     ],
     "rules": [
       {
-        "rule_set": [ "geosite-netflix" ],
-        "outbound": "wireguard-ipv6-only-out"
-      },
-      {
-        "domain": [
-          "api.statsig.com","browser-intake-datadoghq.com","cdn.openai.com","chat.openai.com","auth.openai.com",
-          "chat.openai.com.cdn.cloudflare.net","ios.chat.openai.com","o33249.ingest.sentry.io","openai-api.arkoselabs.com",
-          "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net","openaicomproductionae4b.blob.core.windows.net",
-		  "production-openaicom-storage.azureedge.net","static.cloudflareinsights.com"
-        ],
-        "domain_suffix": [
-          ".algolia.net",".auth0.com",".chatgpt.com",".challenges.cloudflare.com",".client-api.arkoselabs.com",".events.statsigapi.net",
-          ".featuregates.org",".identrust.com",".intercom.io",".intercomcdn.com",".launchdarkly.com",".oaistatic.com",".oaiusercontent.com",
-          ".observeit.net",".openai.com",".openaiapi-site.azureedge.net",".openaicom.imgix.net",".segment.io",".sentry.io",".stripe.com"
-        ],
-        "domain_keyword": [ "openaicom-api" ],
-        "outbound": "wireguard-ipv6-prefer-out"
-      },
-      {
-        "domain_suffix": [ "gemini.google.com", "claude.ai", "grok.com", "x.com" ],
-        "outbound": "wireguard-ipv6-prefer-out"
+        "rule_set": ["openai", "netflix"],
+        "outbound": "wireguard-out"
       }
     ],
     "final": "direct"
-   },
-   "experimental": {
-      "cache_file": {
-      "enabled": true,
-      "path": "$work_dir/cache.db",
-      "cache_id": "mycacheid",
-      "store_fakeip": true
-    }
   }
 }
 EOF
+}
 
-    if [[ -n "$VL_OUT_PORT" ]]; then
-        local vl_in_port=${BASE_IN_PORT}
-        vless_inbound=$(cat <<EOF
-{"tag":"vless-reality-in","type":"vless","listen":"::","listen_port":${vl_in_port},"users":[{"uuid":"$uuid","flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":"$private_key","short_id":[""]}}}
-EOF
-)
-        jq ".inbounds += [$vless_inbound]" "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
+    if [[ -n "$VL_PORT" ]]; then
+        jq --argjson port "$vless_port" --arg uuid "$UUID" --arg pk "$private_key" \
+        '.inbounds += [{"type":"vless","tag":"vless-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":$pk}}}]' \
+        "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
 
-    vmess_inbound=$(cat <<EOF
-{"tag":"vmess-ws-in","type":"vmess","listen":"::","listen_port":${vmess_argo_port},"users":[{"uuid":"$uuid"}],"transport":{"type":"ws","path":"/vmess-argo","early_data_header_name":"Sec-WebSocket-Protocol"}}
-EOF
-)
-    jq ".inbounds += [$vmess_inbound]" "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
+    jq --argjson port "$ARGO_PORT" --arg uuid "$UUID" \
+    '.inbounds += [{"type":"vmess","tag":"vmess-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid}],"transport":{"type":"ws","path":"/vmess-argo"}}}]' \
+    "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
 
-    if [[ -n "$SK_OUT_PORT" ]]; then
-        local sk_in_port=$((BASE_IN_PORT + 1))
-        socks_inbound=$(cat <<EOF
-{"tag":"socks-in","type":"socks","listen":"::","listen_port":${sk_in_port},"users":[{"username":"$socks_user","password":"$socks_pass"}]}
-EOF
-)
-        jq ".inbounds += [$socks_inbound]" "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
+    if [[ -n "$SK_PORT" ]]; then
+        jq --argjson port "$socks5_port" --arg user "$socks_uesr" --arg pass "$socks_pass" \
+        '.inbounds += [{"type":"socks","tag":"socks-in","listen":"::","listen_port":$port,"users":[{"username":$user,"password":$pass}]}]' \
+        "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
 
-    if [[ -n "$HY_OUT_PORT" ]]; then
-        local hy_in_port=$((BASE_IN_PORT + 3))
-        hy2_inbound=$(cat <<EOF
-{"tag":"hysteria2-in","type":"hysteria2","listen":"::","listen_port":${hy_in_port},"sniff":true,"sniff_override_destination":false,"users":[{"password":"$uuid"}],"ignore_client_bandwidth":false,"masquerade":"https://bing.com","tls":{"enabled":true,"alpn":["h3"],"min_version":"1.3","max_version":"1.3","certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}
-EOF
-)
-        jq ".inbounds += [$hy2_inbound]" "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
+    if [[ -n "$HY_PORT" ]]; then
+        jq --argjson port "$hy2_port" --arg uuid "$UUID" \
+        '.inbounds += [{"type":"hysteria2","tag":"hysteria2-in","listen":"::","listen_port":$port,"users":[{"password":$uuid}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}}]' \
+        "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
 
-    if [[ -n "$TU_OUT_PORT" ]]; then
-        local tu_in_port=$((BASE_IN_PORT + 2))
-        tuic_inbound=$(cat <<EOF
-{"tag":"tuic-in","type":"tuic","listen":"::","listen_port":${tu_in_port},"users":[{"uuid":"$uuid","password":"$password"}],"congestion_control":"bbr","tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}
-EOF
-)
-        jq ".inbounds += [$tuic_inbound]" "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
+    if [[ -n "$TU_PORT" ]]; then
+        jq --argjson port "$tuic_port" --arg uuid "$UUID" --arg pass "$password" \
+        '.inbounds += [{"type":"tuic","tag":"tuic-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"password":$pass}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}}]' \
+        "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
     fi
 }
 
@@ -281,7 +363,7 @@ credentials-file: ${work_dir}/tunnel.json
 protocol: http2
 ingress:
   - hostname: $ARGO_DOMAIN
-    service: http://localhost:$vmess_argo_port
+    service: http://localhost:$ARGO_PORT
     originRequest:
       noTLSVerify: true
   - service: http_status:404
@@ -292,7 +374,7 @@ EOF
         fi
     else
         yellow "未检测到ARGO环境变量，启用临时隧道模式"
-        argo_cmd="/etc/sing-box/argo tunnel --url http://localhost:$vmess_argo_port --no-autoupdate --edge-ip-version auto --protocol http2 > /etc/sing-box/argo.log 2>&1"
+        argo_cmd="/etc/sing-box/argo tunnel --url http://localhost:$ARGO_PORT --no-autoupdate --edge-ip-version auto --protocol http2 > /etc/sing-box/argo.log 2>&1"
     fi
 
     # 根据系统类型，输出最终格式化的命令
@@ -382,11 +464,11 @@ EOF
 
 get_info() {
     clear
-    uuid=$(jq -r '.inbounds[0].users[0].uuid' "$config_dir" 2>/dev/null)
-    password=$(jq -r '.inbounds[] | select(.type == "tuic") | .users[].password' "$config_dir" 2>/dev/null)
-    public_key=$(cat "${pub_key_file}" 2>/dev/null)
-    socks_user=$(jq -r '.inbounds[] | select(.type == "socks") | .users[].username' "$config_dir" 2>/dev/null)
-    socks_pass=$(jq -r '.inbounds[] | select(.type == "socks") | .users[].password' "$config_dir" 2>/dev/null)
+    local uuid=$(jq -r '.inbounds[0].users[0].uuid' "$config_dir" 2>/dev/null)
+    local password=$(jq -r '.inbounds[] | select(.type == "tuic") | .users[].password' "$config_dir" 2>/dev/null)
+    local public_key=$(cat "${pub_key_file}" 2>/dev/null)
+    local socks_user=$(jq -r '.inbounds[] | select(.type == "socks") | .users[].username' "$config_dir" 2>/dev/null)
+    local socks_pass=$(jq -r '.inbounds[] | select(.type == "socks") | .users[].password' "$config_dir" 2>/dev/null)
     
     server_ip=$(get_realip)
     isp=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g' || echo "vps")
@@ -408,23 +490,23 @@ get_info() {
     
     > "${client_dir}"
 
-    if [[ -n "$VL_OUT_PORT" ]]; then
-        echo "vless://${uuid}@${server_ip}:${VL_OUT_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.iij.ad.jp&fp=chrome&pbk=${public_key}&type=tcp&headerType=none#${isp}_VLESS" >> "${client_dir}"
+    if [[ -n "$VL_PORT" ]]; then
+        echo "vless://${uuid}@${server_ip}:${VL_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.iij.ad.jp&fp=chrome&pbk=${public_key}&type=tcp&headerType=none#${isp}" >> "${client_dir}"
     fi
 
-    VMESS="{ \"v\": \"2\", \"ps\": \"${isp}_VMESS_ARGO\", \"add\": \"${CFIP}\", \"port\": \"${CFPORT}\", \"id\": \"${uuid}\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"${argodomain}\", \"path\": \"/vmess-argo?ed=2048\", \"tls\": \"tls\", \"sni\": \"${argodomain}\", \"alpn\": \"\", \"fp\": \"randomized\"}"
+    VMESS="{ \"v\": \"2\", \"ps\": \"${isp}\", \"add\": \"${CFIP}\", \"port\": \"${CFPORT}\", \"id\": \"${uuid}\", \"aid\": \"0\", \"scy\": \"none\", \"net\": \"ws\", \"type\": \"none\", \"host\": \"${argodomain}\", \"path\": \"/vmess-argo?ed=2048\", \"tls\": \"tls\", \"sni\": \"${argodomain}\", \"alpn\": \"\", \"fp\": \"randomized\"}"
     echo "vmess://$(echo "$VMESS" | base64 -w0)" >> "${client_dir}"
 
-    if [[ -n "$HY_OUT_PORT" ]]; then
-        echo "hysteria2://${uuid}@${server_ip}:${HY_OUT_PORT}/?sni=www.bing.com&insecure=1&alpn=h3&obfs=none#${isp}_HY2" >> "${client_dir}"
+    if [[ -n "$HY_PORT" ]]; then
+        echo "hysteria2://${uuid}@${server_ip}:${HY_PORT}/?sni=www.bing.com&insecure=1&alpn=h3&obfs=none#${isp}" >> "${client_dir}"
     fi
 
-    if [[ -n "$TU_OUT_PORT" ]]; then
-        echo "tuic://${uuid}:${password}@${server_ip}:${TU_OUT_PORT}?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#${isp}_TUIC" >> "${client_dir}"
+    if [[ -n "$TU_PORT" ]]; then
+        echo "tuic://${uuid}:${password}@${server_ip}:${TU_PORT}?sni=www.bing.com&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#${isp}" >> "${client_dir}"
     fi
 
-    if [[ -n "$SK_OUT_PORT" ]]; then
-        echo "socks5://${socks_user}:${socks_pass}@${server_ip}:${SK_OUT_PORT}#${isp}_SOCKS" >> "${client_dir}"
+    if [[ -n "$SK_PORT" ]]; then
+        echo "socks5://${socks_user}:${socks_pass}@${server_ip}:${SK_PORT}#${isp}" >> "${client_dir}"
     fi
 
     echo ""
@@ -517,7 +599,7 @@ uninstall_singbox() {
 create_shortcut() {
     cat > "/usr/bin/sb" << EOF
 #!/bin/bash
-bash <(curl -Ls [YOUR_SCRIPT_URL]) \$1
+bash <(curl -Ls https://raw.githubusercontent.com/yutian81/Keepalive/main/vps_nat5in1.sh) \$1
 EOF
     chmod +x "/usr/bin/sb"
     if [ -s /usr/bin/sb ]; then
@@ -618,7 +700,7 @@ manage_argo() {
         3) restart_argo ;;
         4)
             clear
-            yellow "\n固定隧道可为json或token，端口为${vmess_argo_port}，请自行在Cloudflare后台设置\n"
+            yellow "\n固定隧道可为json或token，端口为${ARGO_PORT}，请自行在Cloudflare后台设置\n"
             purple "获取JSON地址：https://fscarmen.cloudflare.now.cc\n"
             reading "请输入你的argo域名: " argo_domain
             local ArgoDomain=$argo_domain
@@ -738,10 +820,10 @@ while true; do
    menu
    case "${choice}" in
         1)
-            if [[ -z "$VL_OUT_PORT" && -z "$SK_OUT_PORT" && -z "$TU_OUT_PORT" && -z "$HY_OUT_PORT" ]]; then
+            if [[ -z "$VL_PORT" && -z "$SK_PORT" && -z "$TU_PORT" && -z "$HY_PORT" ]]; then
                 red "错误：您必须至少通过环境变量指定一个外部端口才能进行安装！"
                 yellow "用法示例: "
-                purple "export VL_OUT_PORT=49752 bash <(curl ...)"
+                purple "export VL_PORT=49752 bash <(curl ...)"
                 sleep 5
                 continue
             fi
