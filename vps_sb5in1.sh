@@ -335,11 +335,7 @@ cat > "${config_dir}" << EOF
       ],
       "private_key": "gBthRjevHDGyV0KvYwYE52NIPy29sSrVr6rcQtYNcXA=",
       "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-      "reserved": [
-        6,
-        146,
-        6
-      ]
+	  "reserved": [ 6, 146, 6 ]
     },
     {
       "type": "direct",
@@ -385,52 +381,22 @@ cat > "${config_dir}" << EOF
     ],
     "rules": [
       {
-        "rule_set": [
-          "geosite-netflix"
-        ],
+        "rule_set": [ "geosite-netflix" ],
         "outbound": "wireguard-ipv6-only-out"
       },
       {
         "domain": [
-          "api.statsig.com",
-          "browser-intake-datadoghq.com",
-          "cdn.openai.com",
-          "chat.openai.com",
-          "auth.openai.com",
-          "chat.openai.com.cdn.cloudflare.net",
-          "ios.chat.openai.com",
-          "o33249.ingest.sentry.io",
-          "openai-api.arkoselabs.com",
-          "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net",
-          "openaicomproductionae4b.blob.core.windows.net",
-          "production-openaicom-storage.azureedge.net",
-          "static.cloudflareinsights.com"
+          "api.statsig.com","browser-intake-datadoghq.com","cdn.openai.com","chat.openai.com","auth.openai.com",
+          "chat.openai.com.cdn.cloudflare.net","ios.chat.openai.com","o33249.ingest.sentry.io","openai-api.arkoselabs.com",
+          "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net","openaicomproductionae4b.blob.core.windows.net","production-openaicom-storage.azureedge.net",
+          "static.cloudflareinsights.com","gemini.google.com","claude.ai","grok.com"
         ],
         "domain_suffix": [
-          ".algolia.net",
-          ".auth0.com",
-          ".chatgpt.com",
-          ".challenges.cloudflare.com",
-          ".client-api.arkoselabs.com",
-          ".events.statsigapi.net",
-          ".featuregates.org",
-          ".identrust.com",
-          ".intercom.io",
-          ".intercomcdn.com",
-          ".launchdarkly.com",
-          ".oaistatic.com",
-          ".oaiusercontent.com",
-          ".observeit.net",
-          ".openai.com",
-          ".openaiapi-site.azureedge.net",
-          ".openaicom.imgix.net",
-          ".segment.io",
-          ".sentry.io",
-          ".stripe.com"
+          ".algolia.net",".auth0.com",".chatgpt.com",".challenges.cloudflare.com",".client-api.arkoselabs.com",".events.statsigapi.net",
+          ".featuregates.org",".identrust.com",".intercom.io",".intercomcdn.com",".launchdarkly.com",".oaistatic.com",".oaiusercontent.com",
+          ".observeit.net",".openai.com",".openaiapi-site.azureedge.net",".openaicom.imgix.net",".segment.io",".sentry.io",".stripe.com"
         ],
-        "domain_keyword": [
-          "openaicom-api"
-        ],
+        "domain_keyword": [ "openaicom-api" ],
         "outbound": "wireguard-ipv6-prefer-out"
       }
     ],
@@ -1234,7 +1200,7 @@ while true; do
         6) change_config ;;
         7) 
            clear
-           curl -fsSL https://raw.githubusercontent.com/eooce/ssh_tool/main/ssh_tool.sh -o ssh_tool.sh && chmod +x ssh_tool.sh && bash ssh_tool.sh
+           curl -fsSLO ssh_tool.eooce.com && bash ssh_tool.sh
            ;;
         0) exit 0 ;;
         *) red "无效的选项，请输入 0 到 8" ;;
