@@ -169,9 +169,19 @@ install_singbox() {
     private_key=$(echo "${output}" | awk '/PrivateKey:/ {print $2}')
     public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
 
-    iptables -F > /dev/null 2>&1 && iptables -P INPUT ACCEPT > /dev/null 2>&1 && iptables -P FORWARD ACCEPT > /dev/null 2>&1 && iptables -P OUTPUT ACCEPT > /dev/null 2>&1
-    command -v ip6tables &> /dev/null && ip6tables -F > /dev/null 2>&1 && ip6tables -P INPUT ACCEPT > /dev/null 2>&1 && ip6tables -P FORWARD ACCEPT > /dev/null 2>&1 && ip6tables -P OUTPUT ACCEPT > /dev/null 2>&1
+    # IPv4 规则
+    iptables -F > /dev/null 2>&1 \
+      && iptables -P INPUT ACCEPT > /dev/null 2>&1 \
+      && iptables -P FORWARD ACCEPT > /dev/null 2>&1 \
+      && iptables -P OUTPUT ACCEPT > /dev/null 2>&1
     
+    # IPv6 规则（先检查 ip6tables 是否存在）
+    command -v ip6tables &> /dev/null \
+      && ip6tables -F > /dev/null 2>&1 \
+      && ip6tables -P INPUT ACCEPT > /dev/null 2>&1 \
+      && ip6tables -P FORWARD ACCEPT > /dev/null 2>&1 \
+      && ip6tables -P OUTPUT ACCEPT > /dev/null 2>&1
+
     manage_packages uninstall ufw firewalld > /dev/null 2>&1
 
     # 生成自签名证书
@@ -1172,7 +1182,7 @@ while true; do
             if [ ${check_singbox} -eq 0 ]; then
                 yellow "sing-box 已经安装！"
             else
-                manage_packages install jq tar openssl iptables
+                manage_packages install jq tar curl openssl iptables
                 [ -n "$(curl -s --max-time 2 ipv6.ip.sb)" ] && manage_packages install ip6tables
                 install_singbox
 
