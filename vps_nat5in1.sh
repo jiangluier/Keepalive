@@ -1152,7 +1152,7 @@ while true; do
                     sleep 3
                     continue
                 fi
-                manage_packages install jq tar curl openssl iptables
+                manage_packages install jq tar openssl iptables
                 [ -n "$(curl -s --max-time 2 ipv6.ip.sb)" ] && manage_packages install ip6tables
                 install_singbox
 
