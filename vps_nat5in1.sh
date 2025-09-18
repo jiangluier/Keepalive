@@ -21,18 +21,15 @@ config_dir="${work_dir}/config.json"
 client_dir="${work_dir}/url.txt"
 pub_key_file="${work_dir}/reality.pub"
 
-# 从外部环境变量读取【外部端口】
+# 导入外部变量
 # 示例: export VL_OUT_PORT=49752 bash <(curl ...)
 export VL_OUT_PORT=${VL_OUT_PORT:-}
 export SK_OUT_PORT=${SK_OUT_PORT:-}
 export TU_OUT_PORT=${TU_OUT_PORT:-}
 export HY_OUT_PORT=${HY_OUT_PORT:-}
-
-# 定义【内部端口】的基础值。服务将在此基础上监听端口。也可以从外部传入。
-# 示例: export BASE_IN_PORT=30000 bash <(curl ...)
 export BASE_IN_PORT=${BASE_IN_PORT:-34766}
-
-# 内部固定端口和默认值
+export ARGO_DOMAIN=${ARGO_DOMAIN:-}
+export ARGO_AUTH=${ARGO_AUTH:-}
 export vmess_argo_port=8001
 export CFIP=${CFIP:-'cf.090227.xyz'}
 export CFPORT=${CFPORT:-'8443'}
@@ -42,30 +39,30 @@ export CFPORT=${CFPORT:-'8443'}
 
 # 检查 sing-box 是否已安装
 check_singbox() {
-if [ -f "${work_dir}/${server_name}" ]; then
-    if [ -f /etc/alpine-release ]; then
-        rc-service sing-box status | grep -q "started" && green "running" && return 0 || yellow "not running" && return 1
+    if [ -f "${work_dir}/${server_name}" ]; then
+        if [ -f /etc/alpine-release ]; then
+            rc-service sing-box status | grep -q "started" && green "running" && return 0 || yellow "not running" && return 1
+        else
+            [ "$(systemctl is-active sing-box)" = "active" ] && green "running" && return 0 || yellow "not running" && return 1
+        fi
     else
-        [ "$(systemctl is-active sing-box)" = "active" ] && green "running" && return 0 || yellow "not running" && return 1
+        red "not installed"
+        return 2
     fi
-else
-    red "not installed"
-    return 2
-fi
 }
 
 # 检查 argo 是否已安装
 check_argo() {
-if [ -f "${work_dir}/argo" ]; then
-    if [ -f /etc/alpine-release ]; then
-        rc-service argo status | grep -q "started" && green "running" && return 0 || yellow "not running" && return 1
+    if [ -f "${work_dir}/argo" ]; then
+        if [ -f /etc/alpine-release ]; then
+            rc-service argo status | grep -q "started" && green "running" && return 0 || yellow "not running" && return 1
+        else
+            [ "$(systemctl is-active argo)" = "active" ] && green "running" && return 0 || yellow "not running" && return 1
+        fi
     else
-        [ "$(systemctl is-active argo)" = "active" ] && green "running" && return 0 || yellow "not running" && return 1
+        red "not installed"
+        return 2
     fi
-else
-    red "not installed"
-    return 2
-fi
 }
 
 #根据系统类型安装、卸载依赖
@@ -82,7 +79,7 @@ manage_packages() {
                 green "依赖 ${package} 已安装"
                 continue
             fi
-            yellow "正在安装 ${package}..."
+            yellow "正在安装依赖 ${package}..."
             if command -v apt-get &>/dev/null; then
                 apt-get update && apt-get install -y "$package"
             elif command -v dnf &>/dev/null; then
@@ -162,80 +159,12 @@ install_singbox() {
     "timestamp": true
   },
   "dns": {
-    "servers": [
-      {
-        "tag": "google",
-        "address": "tls://8.8.8.8"
-      }
-    ]
+    "servers": [ { "tag": "google", "address": "tls://8.8.8.8" } ]
   },
   "inbounds": [],
   "outbounds": [
-    {
-      "type": "direct",
-      "tag": "direct"
-    },
-    {
-      "type": "direct",
-      "tag": "direct-ipv4-prefer-out",
-      "domain_strategy": "prefer_ipv4"
-    },
-    {
-      "type": "direct",
-      "tag": "direct-ipv4-only-out",
-      "domain_strategy": "ipv4_only"
-    },
-    {
-      "type": "direct",
-      "tag": "direct-ipv6-prefer-out",
-      "domain_strategy": "prefer_ipv6"
-    },
-    {
-      "type": "direct",
-      "tag": "direct-ipv6-only-out",
-      "domain_strategy": "ipv6_only"
-    },
-    {
-      "type": "wireguard",
-      "tag": "wireguard-out",
-      "server": "engage.cloudflareclient.com",
-      "server_port": 2408,
-      "local_address": [
-        "172.16.0.2/32",
-        "2606:4700:110:812a:4929:7d2a:af62:351c/128"
-      ],
-      "private_key": "gBthRjevHDGyV0KvYwYE52NIPy29sSrVr6rcQtYNcXA=",
-      "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-      "reserved": [
-        6,
-        146,
-        6
-      ]
-    },
-    {
-      "type": "direct",
-      "tag": "wireguard-ipv4-prefer-out",
-      "detour": "wireguard-out",
-      "domain_strategy": "prefer_ipv4"
-    },
-    {
-      "type": "direct",
-      "tag": "wireguard-ipv4-only-out",
-      "detour": "wireguard-out",
-      "domain_strategy": "ipv4_only"
-    },
-    {
-      "type": "direct",
-      "tag": "wireguard-ipv6-prefer-out",
-      "detour": "wireguard-out",
-      "domain_strategy": "prefer_ipv6"
-    },
-    {
-      "type": "direct",
-      "tag": "wireguard-ipv6-only-out",
-      "detour": "wireguard-out",
-      "domain_strategy": "ipv6_only"
-    }
+    { "type": "direct", "tag": "direct" },
+    { "type": "wireguard", "tag": "wireguard-out", "server": "engage.cloudflareclient.com", "server_port": 2408, "local_address": [ "172.16.0.2/32", "2606:4700:110:812a:4929:7d2a:af62:351c/128" ], "private_key": "gBthRjevHDGyV0KvYwYE52NIPy29sSrVr6rcQtYNcXA=", "peer_public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=", "reserved": [ 6, 146, 6 ] }
   ],
   "route": {
     "rule_set": [
@@ -256,56 +185,26 @@ install_singbox() {
     ],
     "rules": [
       {
-        "rule_set": [
-          "geosite-netflix"
-        ],
+        "rule_set": [ "geosite-netflix" ],
         "outbound": "wireguard-ipv6-only-out"
       },
       {
         "domain": [
-          "api.statsig.com",
-          "browser-intake-datadoghq.com",
-          "cdn.openai.com",
-          "chat.openai.com",
-          "auth.openai.com",
-          "chat.openai.com.cdn.cloudflare.net",
-          "ios.chat.openai.com",
-          "o33249.ingest.sentry.io",
-          "openai-api.arkoselabs.com",
-          "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net",
-          "openaicomproductionae4b.blob.core.windows.net",
-          "production-openaicom-storage.azureedge.net",
-          "static.cloudflareinsights.com"
+          "api.statsig.com","browser-intake-datadoghq.com","cdn.openai.com","chat.openai.com","auth.openai.com",
+          "chat.openai.com.cdn.cloudflare.net","ios.chat.openai.com","o33249.ingest.sentry.io","openai-api.arkoselabs.com",
+          "openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net","openaicomproductionae4b.blob.core.windows.net",
+		  "production-openaicom-storage.azureedge.net","static.cloudflareinsights.com"
         ],
         "domain_suffix": [
-          ".algolia.net",
-          ".auth0.com",
-          ".chatgpt.com",
-          ".challenges.cloudflare.com",
-          ".client-api.arkoselabs.com",
-          ".events.statsigapi.net",
-          ".featuregates.org",
-          ".identrust.com",
-          ".intercom.io",
-          ".intercomcdn.com",
-          ".launchdarkly.com",
-          ".oaistatic.com",
-          ".oaiusercontent.com",
-          ".observeit.net",
-          ".openai.com",
-          ".openaiapi-site.azureedge.net",
-          ".openaicom.imgix.net",
-          ".segment.io",
-          ".sentry.io",
-          ".stripe.com"
+          ".algolia.net",".auth0.com",".chatgpt.com",".challenges.cloudflare.com",".client-api.arkoselabs.com",".events.statsigapi.net",
+          ".featuregates.org",".identrust.com",".intercom.io",".intercomcdn.com",".launchdarkly.com",".oaistatic.com",".oaiusercontent.com",
+          ".observeit.net",".openai.com",".openaiapi-site.azureedge.net",".openaicom.imgix.net",".segment.io",".sentry.io",".stripe.com"
         ],
-        "domain_keyword": [
-          "openaicom-api"
-        ],
+        "domain_keyword": [ "openaicom-api" ],
         "outbound": "wireguard-ipv6-prefer-out"
       },
       {
-        "domain_suffix": [ "gemini.google.com", "claude.ai", "x.com", "grok.com" ],
+        "domain_suffix": [ "gemini.google.com", "claude.ai", "grok.com", "x.com" ],
         "outbound": "wireguard-ipv6-prefer-out"
       }
     ],
@@ -314,7 +213,7 @@ install_singbox() {
    "experimental": {
       "cache_file": {
       "enabled": true,
-      "path": "/etc/sing-box/cache.db",
+      "path": "$work_dir/cache.db",
       "cache_id": "mycacheid",
       "store_fakeip": true
     }
@@ -365,6 +264,45 @@ EOF
     fi
 }
 
+# 生成Argo启动命令 (可复用函数)
+generate_argo_command() {
+    local system_type=$1 # 接收 "systemd" 或 "openrc"
+    local argo_cmd=""
+
+    if [[ -n "$ARGO_DOMAIN" && -n "$ARGO_AUTH" ]]; then
+        yellow "检测到ARGO环境变量，启用固定隧道模式"
+        if [[ $ARGO_AUTH =~ TunnelSecret ]]; then
+            # JSON 逻辑
+            echo "$ARGO_AUTH" > "${work_dir}/tunnel.json"
+            local tunnel_id=$(jq -r .TunnelID <<< "$ARGO_AUTH")
+            cat > "${work_dir}/tunnel.yml" << EOF
+tunnel: $tunnel_id
+credentials-file: ${work_dir}/tunnel.json
+protocol: http2
+ingress:
+  - hostname: $ARGO_DOMAIN
+    service: http://localhost:$vmess_argo_port
+    originRequest:
+      noTLSVerify: true
+  - service: http_status:404
+EOF
+            argo_cmd="/etc/sing-box/argo tunnel --edge-ip-version auto --config /etc/sing-box/tunnel.yml run"
+        else
+            argo_cmd="/etc/sing-box/argo tunnel --edge-ip-version auto --no-autoupdate --protocol http2 run --token '$ARGO_AUTH'"
+        fi
+    else
+        yellow "未检测到ARGO环境变量，启用临时隧道模式"
+        argo_cmd="/etc/sing-box/argo tunnel --url http://localhost:$vmess_argo_port --no-autoupdate --edge-ip-version auto --protocol http2 > /etc/sing-box/argo.log 2>&1"
+    fi
+
+    # 根据系统类型，输出最终格式化的命令
+    if [[ "$system_type" == "systemd" ]]; then
+        echo "/bin/sh -c \"$argo_cmd\""
+    elif [[ "$system_type" == "openrc" ]]; then
+        echo "-c '$argo_cmd'"
+    fi
+}
+
 # debian/ubuntu/centos 守护进程
 main_systemd_services() {
     cat > /etc/systemd/system/sing-box.service << EOF
@@ -372,7 +310,6 @@ main_systemd_services() {
 Description=sing-box service
 Documentation=https://sing-box.sagernet.org
 After=network.target nss-lookup.target
-
 [Service]
 User=root
 WorkingDirectory=/etc/sing-box
@@ -383,31 +320,30 @@ ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartSec=10
 LimitNOFILE=infinity
-
 [Install]
 WantedBy=multi-user.target
 EOF
+
+    local argo_exec_start=$(generate_argo_command "systemd")
 
     cat > /etc/systemd/system/argo.service << EOF
 [Unit]
 Description=Cloudflare Tunnel
 After=network.target
-
 [Service]
 Type=simple
 NoNewPrivileges=yes
 TimeoutStartSec=0
-ExecStart=/bin/sh -c "/etc/sing-box/argo tunnel --url http://localhost:$vmess_argo_port --no-autoupdate --edge-ip-version auto --protocol http2 > /etc/sing-box/argo.log 2>&1"
+ExecStart=${argo_exec_start}
 Restart=on-failure
 RestartSec=5s
-
 [Install]
 WantedBy=multi-user.target
 EOF
+
     if [ -f /etc/centos-release ]; then
         yum install -y chrony
-        systemctl start chronyd
-        systemctl enable chronyd
+        systemctl start chronyd && systemctl enable chronyd
         chronyc -a makestep
         yum update -y ca-certificates
         bash -c 'echo "0 0" > /proc/sys/net/ipv4/ping_group_range'
@@ -421,7 +357,6 @@ EOF
 alpine_openrc_services() {
     cat > /etc/init.d/sing-box << 'EOF'
 #!/sbin/openrc-run
-
 description="sing-box service"
 command="/etc/sing-box/sing-box"
 command_args="run -c /etc/sing-box/config.json"
@@ -429,18 +364,18 @@ command_background=true
 pidfile="/var/run/sing-box.pid"
 EOF
 
-    cat > /etc/init.d/argo << 'EOF'
-#!/sbin/openrc-run
+    local argo_command_args=$(generate_argo_command "openrc")
 
+    cat > /etc/init.d/argo << EOF
+#!/sbin/openrc-run
 description="Cloudflare Tunnel"
 command="/bin/sh"
-command_args="-c '/etc/sing-box/argo tunnel --url http://localhost:$vmess_argo_port --no-autoupdate --edge-ip-version auto --protocol http2 > /etc/sing-box/argo.log 2>&1'"
+command_args="${argo_command_args}"
 command_background=true
 pidfile="/var/run/argo.pid"
 EOF
 
-    chmod +x /etc/init.d/sing-box
-    chmod +x /etc/init.d/argo
+    chmod +x /etc/init.d/sing-box /etc/init.d/argo
     rc-update add sing-box default
     rc-update add argo default
 }
@@ -456,15 +391,20 @@ get_info() {
     server_ip=$(get_realip)
     isp=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g' || echo "vps")
 
-    for i in {1..5}; do
-        purple "第 $i 次尝试获取ArgoDomain中..."
-        argodomain=$(sed -n 's|.*https://\([^/]*trycloudflare\.com\).*|\1|p' "${work_dir}/argo.log")
-        [ -n "$argodomain" ] && break
-        sleep 2
-    done
-    [ -z "$argodomain" ] && red "获取Argo域名失败，请检查Argo服务日志！"
-
-    green "\nArgoDomain: ${purple}$argodomain${re}\n"
+    local argodomain
+    if [[ -n "$ARGO_DOMAIN" ]]; then
+        argodomain="$ARGO_DOMAIN"
+        green "\n固定隧道域名: ${purple}$argodomain${re}\n"
+    else
+        for i in {1..5}; do
+            purple "第 $i 次尝试获取Argo临时域名中..."
+            argodomain=$(sed -n 's|.*https://\([^/]*trycloudflare\.com\).*|\1|p' "${work_dir}/argo.log")
+            [ -n "$argodomain" ] && break
+            sleep 2
+        done
+        [ -z "$argodomain" ] && red "获取Argo域名失败，请检查Argo服务日志！"
+        green "\nArgo临时域名: ${purple}$argodomain${re}\n"
+    fi
     
     > "${client_dir}"
 
@@ -493,7 +433,6 @@ get_info() {
     echo ""
 }
 
-# 启动 sing-box
 start_singbox() {
     yellow "正在启动 ${server_name} 服务..."
     if [ -f /etc/alpine-release ]; then rc-service sing-box start; else systemctl start "${server_name}"; fi
@@ -501,7 +440,6 @@ start_singbox() {
     check_singbox &>/dev/null; [[ $? -eq 0 ]] && green "${server_name} 启动成功" || red "${server_name} 启动失败"
 }
 
-# 停止 sing-box
 stop_singbox() {
     yellow "正在停止 ${server_name} 服务..."
     if [ -f /etc/alpine-release ]; then rc-service sing-box stop; else systemctl stop "${server_name}"; fi
@@ -509,7 +447,6 @@ stop_singbox() {
     check_singbox &>/dev/null; [[ $? -eq 1 ]] && green "${server_name} 停止成功" || red "${server_name} 停止失败"
 }
 
-# 重启 sing-box
 restart_singbox() {
     yellow "正在重启 ${server_name} 服务..."
     if [ -f /etc/alpine-release ]; then rc-service sing-box restart; else systemctl restart "${server_name}"; fi
@@ -517,7 +454,6 @@ restart_singbox() {
     check_singbox &>/dev/null; [[ $? -eq 0 ]] && green "${server_name} 重启成功" || red "${server_name} 重启失败"
 }
 
-# 启动 argo
 start_argo() {
     yellow "正在启动 Argo 服务..."
     if [ -f /etc/alpine-release ]; then rc-service argo start; else systemctl start argo; fi
@@ -525,7 +461,6 @@ start_argo() {
     check_argo &>/dev/null; [[ $? -eq 0 ]] && green "Argo 启动成功" || red "Argo 启动失败"
 }
 
-# 停止 argo
 stop_argo() {
     yellow "正在停止 Argo 服务..."
     if [ -f /etc/alpine-release ]; then rc-service argo stop; else systemctl stop argo; fi
@@ -533,7 +468,6 @@ stop_argo() {
     check_argo &>/dev/null; [[ $? -eq 1 ]] && green "Argo 停止成功" || red "Argo 停止失败"
 }
 
-# 重启 argo
 restart_argo() {
     yellow "正在重启 Argo 服务..."
     if [ -f /etc/alpine-release ]; then rc-service argo restart; else systemctl restart argo; fi
@@ -583,7 +517,7 @@ uninstall_singbox() {
 create_shortcut() {
     cat > "/usr/bin/sb" << EOF
 #!/bin/bash
-bash <(curl -Ls https://raw.githubusercontent.com/yutian81/Keepalive/main/vps_sb5in1.sh) \$1
+bash <(curl -Ls [YOUR_SCRIPT_URL]) \$1
 EOF
     chmod +x "/usr/bin/sb"
     if [ -s /usr/bin/sb ]; then
@@ -601,13 +535,22 @@ change_hosts() {
 
 change_config() {
     clear
-    green "1. 修改通用 UUID"
-    green "2. 修改 Reality 伪装域名"
-    purple "3. 返回主菜单"
-    
-    reading "\n请输入选择: " choice
+    green "1. 修改端口"
+    skyblue "------------"
+    green "2. 修改UUID"
+    skyblue "------------"
+    green "3. 修改Reality伪装域名"
+    skyblue "------------"
+    purple "4. 返回主菜单"
+    skyblue "------------"
+    reading "请输入选择: " choice
     case "${choice}" in
         1)
+            purple "此脚本已适配NAT VPS模式，端口管理已移至脚本外部，通过环境变量控制。"
+            yellow "如需修改，请在VPS服务商后台修改NAT映射，然后使用新的外部端口变量卸载并重装。"
+            sleep 4
+            ;;
+        2)
             reading "\n请输入新的UUID (回车将自动生成): " new_uuid
             [ -z "$new_uuid" ] && new_uuid=$(cat /proc/sys/kernel/random/uuid)
             jq --arg u "$new_uuid" '
@@ -621,10 +564,10 @@ change_config() {
             get_info
             green "\n通用UUID已修改为：${purple}${new_uuid}${re}\n"
             ;;
-        2)
+        3) 
             clear
             green "\n1. www.joom.com\n2. www.stengg.com\n3. www.wedgehr.com\n4. www.cerebrium.ai\n5. www.nazhumi.com\n"
-            reading "请输入新的Reality伪装域名(可自定义,回车将使用默认1): " new_sni
+            reading "\n请输入新的Reality伪装域名(可自定义,回车将使用默认1): " new_sni
             case "$new_sni" in
                 "") new_sni="www.joom.com" ;; "1") new_sni="www.joom.com" ;; "2") new_sni="www.stengg.com" ;;
                 "3") new_sni="www.wedgehr.com" ;; "4") new_sni="www.cerebrium.ai" ;; "5") new_sni="www.nazhumi.com" ;;
@@ -635,14 +578,10 @@ change_config() {
             ' "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
             restart_singbox
             get_info
-            green "\nReality SNI已修改为：${purple}${new_sni}${re}\n"
+            green "\nReality sni已修改为：${purple}${new_sni}${re}\n"
             ;;
-        3)
-            return
-            ;;
-        *)
-            red "无效的选项！"
-            ;;
+        4) menu ;;
+        *)  red "无效的选项！" ;;
     esac
 }
 
@@ -669,15 +608,88 @@ manage_argo() {
     green "1. 启动"
     green "2. 停止"
     green "3. 重启"
-    purple "4. 返回主菜单"
+    green "4. 添加Argo固定隧道"
+    green "5. 切换回Argo临时隧道"
+    purple "6. 返回主菜单"
     reading "\n请输入选择: " choice
     case "${choice}" in
         1) start_argo ;;
         2) stop_argo ;;
         3) restart_argo ;;
-        4) return ;;
+        4)
+            clear
+            yellow "\n固定隧道可为json或token，端口为${vmess_argo_port}，请自行在Cloudflare后台设置\n"
+            purple "获取JSON地址：https://fscarmen.cloudflare.now.cc\n"
+            reading "请输入你的argo域名: " argo_domain
+            local ArgoDomain=$argo_domain
+            reading "请输入你的argo密钥(token或json): " argo_auth
+
+            if [[ $argo_auth =~ TunnelSecret ]]; then
+                # JSON 逻辑
+                local temp_argo_auth=$ARGO_AUTH
+                export ARGO_DOMAIN=$argo_domain
+                export ARGO_AUTH=$argo_auth
+                if [ -f /etc/alpine-release ]; then alpine_openrc_services; else main_systemd_services; fi
+                export ARGO_AUTH=$temp_argo_auth
+            elif [[ $argo_auth =~ ^[A-Z0-9a-z=]{120,250}$ ]]; then
+                # TOKEN 逻辑
+                local temp_argo_auth=$ARGO_AUTH
+                export ARGO_DOMAIN=$argo_domain
+                export ARGO_AUTH=$argo_auth
+                if [ -f /etc/alpine-release ]; then alpine_openrc_services; else main_systemd_services; fi
+                export ARGO_AUTH=$temp_argo_auth # 还原
+            else
+                red "argo密钥格式不正确，请重新输入"; sleep 2; return
+            fi
+            restart_argo; change_argo_domain_manual "$ArgoDomain"
+            ;;
+        5)
+            clear
+            export ARGO_DOMAIN=""
+            export ARGO_AUTH=""
+            if [ -f /etc/alpine-release ]; then alpine_openrc_services; else main_systemd_services; fi
+            get_quick_tunnel; change_argo_domain
+            ;;
+        6) return ;;
         *) red "无效的选项！" ;;
     esac
+}
+
+get_quick_tunnel() {
+    restart_argo
+    yellow "正在获取临时argo域名，请稍等...\n"
+    local argo_domain_local
+    for i in {1..5}; do
+        purple "第 $i 次尝试获取ArgoDomain..."
+        argo_domain_local=$(sed -n 's|.*https://\([^/]*trycloudflare\.com\).*|\1|p' "${work_dir}/argo.log")
+        [ -n "$argo_domain_local" ] && break
+        sleep 2
+    done
+    if [ -z "$argo_domain_local" ]; then red "获取临时隧道失败！请检查argo日志。"; else green "ArgoDomain：${purple}$argo_domain_local${re}\n"; fi
+}
+
+change_argo_domain_manual() {
+    local argo_domain_local=$1
+    if [ -z "$argo_domain_local" ] || [ ! -f "$client_dir" ]; then
+        red "Argo域名为空或链接文件不存在，无法更新。"
+        return
+    fi
+    vmess_line=$(grep 'vmess://' "$client_dir")
+    if [ -n "$vmess_line" ]; then
+        encoded_part=$(echo "$vmess_line" | sed 's/vmess:\/\///')
+        decoded_json=$(echo "$encoded_part" | base64 -d)
+        updated_json=$(echo "$decoded_json" | jq --arg domain "$argo_domain_local" '.host = $domain | .sni = $domain')
+        new_encoded_part=$(echo "$updated_json" | base64 -w0)
+        sed -i "s|$encoded_part|$new_encoded_part|" "$client_dir"
+        green "vmess节点已更新,请手动复制最新的vmess-argo节点"
+        purple "vmess://$new_encoded_part\n"
+    fi
+}
+
+change_argo_domain() {
+    local argo_domain_local
+    argo_domain_local=$(sed -n 's|.*https://\([^/]*trycloudflare\.com\).*|\1|p' "${work_dir}/argo.log")
+    change_argo_domain_manual "$argo_domain_local"
 }
 
 check_nodes() {
@@ -698,7 +710,7 @@ menu() {
    check_argo_status=$(check_argo)
    clear
    echo ""
-   purple "=== sing-box NAT VPS 定制版脚本 ===\n"
+   purple "=== sing-box NAT VPS 定制版脚本 (基于老王脚本) ===\n"
    purple "---Argo--- 状态: ${check_argo_status}"
    purple "---singbox--- 状态: ${check_singbox_status}\n"
    green "1. 安装/重装 sing-box"
@@ -708,11 +720,13 @@ menu() {
    green "4. Argo隧道管理"
    echo "==============="
    green "5. 查看节点信息"
-   green "6. 修改节点配置 (UUID/SNI)"
+   green "6. 修改节点配置"
+   echo "==============="
+   purple "7. SSH综合工具箱"
    echo "==============="
    red "0. 退出脚本"
-   echo "==========="
-   reading "请输入选择(0-6): " choice
+   echo "==============="
+   reading "请输入选择(0-7): " choice
    echo ""
 }
 
@@ -727,8 +741,8 @@ while true; do
             if [[ -z "$VL_OUT_PORT" && -z "$SK_OUT_PORT" && -z "$TU_OUT_PORT" && -z "$HY_OUT_PORT" ]]; then
                 red "错误：您必须至少通过环境变量指定一个外部端口才能进行安装！"
                 yellow "用法示例: "
-                purple "export VL_OUT_PORT=49752 HY_OUT_PORT=61976 bash <(curl ...)"
-                sleep 4
+                purple "export VL_OUT_PORT=49752 bash <(curl ...)"
+                sleep 5
                 continue
             fi
             
@@ -761,8 +775,12 @@ while true; do
         4) manage_argo ;;
         5) check_nodes ;;
         6) change_config ;;
+        7) 
+           clear
+           curl -fsSLO ssh_tool.eooce.com && bash ssh_tool.sh
+           ;;
         0) exit 0 ;;
-        *) red "无效的选项，请输入 0 到 6" ;;
+        *) red "无效的选项，请输入 0 到 7" ;;
    esac
    read -n 1 -s -r -p $'\n\033[1;91m按任意键继续...\033[0m'
 done
