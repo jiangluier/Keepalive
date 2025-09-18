@@ -213,13 +213,53 @@ install_singbox() {
     # 检测网络类型并设置DNS策略
     dns_strategy=$(ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1 && echo "prefer_ipv4" || (ping -c 1 -W 3 2001:4860:4860::8888 >/dev/null 2>&1 && echo "prefer_ipv6" || echo "prefer_ipv4"))
 
+    # 拼接入站规则为数组
+    declare -a inbounds_array=()
+
+    # VLESS 入站规则
+    if [[ -n "$VL_PORT" ]]; then
+        inbounds_array+=( "$(jq -n \
+            --argjson port "$vless_port" --arg uuid "$uuid" --arg pk "$private_key" \
+            '{"type":"vless","tag":"vless-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":$pk}}}')"
+    fi
+
+    # VMess (Argo) 入站规则
+    inbounds_array+=( "$(jq -n \
+        --argjson port "$ARGO_PORT" --arg uuid "$uuid" \
+        '{"type":"vmess","tag":"vmess-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid}],"transport":{"type":"ws","path":"/vmess-argo"}}')"
+
+    # SOCKS 入站规则
+    if [[ -n "$SK_PORT" ]]; then
+        inbounds_array+=( "$(jq -n \
+            --argjson port "$socks_port" --arg user "$socks_user" --arg pass "$socks_pass" \
+            '{"type":"socks","tag":"socks-in","listen":"::","listen_port":$port,"users":[{"username":$user,"password":$pass}]}')"
+    fi
+
+    # Hysteria2 入站规则
+    if [[ -n "$HY_PORT" ]]; then
+        inbounds_array+=( "$(jq -n \
+            --argjson port "$hy2_port" --arg uuid "$uuid" \
+            '{"type":"hysteria2","tag":"hysteria2-in","listen":"::","listen_port":$port,"users":[{"password":$uuid}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}')"
+    fi
+
+    # TUIC 入站规则
+    if [[ -n "$TU_PORT" ]]; then
+        inbounds_array+=( "$(jq -n \
+            --argjson port "$tuic_port" --arg uuid "$uuid" --arg pass "$password" \
+            '{"type":"tuic","tag":"tuic-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"password":$pass}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}')"
+    fi
+
+    # 将数组中的 JSON 字符串用逗号连接
+    inbounds_json=$(printf ",%s" "${inbounds_array[@]}")
+    inbounds_json=${inbounds_json:1}
+
     # 写入基础配置文件
     cat > "${config_dir}" << EOF
 {
   "log": { "level": "info", "output": "/etc/sing-box/sb.log", "timestamp": true },
   "dns": { "servers": [{ "tag": "local", "address": "local", "strategy": "$dns_strategy" }] },
   "ntp": { "enabled": true, "server": "time.apple.com", "server_port": 123, "interval": "30m" },  
-  "inbounds": [],
+  "inbounds": [ ${inbounds_json} ],
   "outbounds": [
     { "tag": "direct", "type": "direct" },
     { "tag": "block", "type": "block" },
@@ -264,35 +304,6 @@ install_singbox() {
   }
 }
 EOF
-
-    # --- 动态添加入站规则 ---
-    if [[ -n "$VL_PORT" ]]; then
-        jq --argjson port "$vless_port" --arg uuid "$uuid" --arg pk "$private_key" \
-        '.inbounds += [{"type":"vless","tag":"vless-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":$pk}}}]' \
-        "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
-    fi
-
-    jq --argjson port "$ARGO_PORT" --arg uuid "$uuid" \
-    '.inbounds += [{"type":"vmess","tag":"vmess-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid}],"transport":{"type":"ws","path":"/vmess-argo"}}}]' \
-    "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
-    
-    if [[ -n "$SK_PORT" ]]; then
-        jq --argjson port "$socks_port" --arg user "$socks_user" --arg pass "$socks_pass" \
-        '.inbounds += [{"type":"socks","tag":"socks-in","listen":"::","listen_port":$port,"users":[{"username":$user,"password":$pass}]}]' \
-        "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
-    fi
-
-    if [[ -n "$HY_PORT" ]]; then
-        jq --argjson port "$hy2_port" --arg uuid "$uuid" \
-        '.inbounds += [{"type":"hysteria2","tag":"hysteria2-in","listen":"::","listen_port":$port,"users":[{"password":$uuid}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}}]' \
-        "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
-    fi
-
-    if [[ -n "$TU_PORT" ]]; then
-        jq --argjson port "$tuic_port" --arg uuid "$uuid" --arg pass "$password" \
-        '.inbounds += [{"type":"tuic","tag":"tuic-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"password":$pass}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}}]' \
-        "$config_dir" > "$config_dir.tmp" && mv "$config_dir.tmp" "$config_dir"
-    fi
 }
 
 # 生成Argo启动命令 (可复用函数)
