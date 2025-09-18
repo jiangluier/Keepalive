@@ -794,7 +794,7 @@ change_config() {
                 local new_inbound
                 case "$type" in
                     "vless") new_inbound=$(cat <<EOF
-{"tag":"$tag","type":"vless","listen":"::","listen_port":$new_port,"users":[{"uuid":"$uuid","flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":"$private_key","public_key":"$public_key","short_id":[""]}}}
+{"tag":"$tag","type":"vless","listen":"::","listen_port":$new_port,"users":[{"uuid":"$uuid","flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":"$private_key","short_id":[""]}}}
 EOF
 ) ;;
                     "socks") new_inbound=$(cat <<EOF
