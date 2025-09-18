@@ -214,44 +214,52 @@ install_singbox() {
     dns_strategy=$(ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1 && echo "prefer_ipv4" || (ping -c 1 -W 3 2001:4860:4860::8888 >/dev/null 2>&1 && echo "prefer_ipv6" || echo "prefer_ipv4"))
 
     # 拼接入站规则为数组
-    declare -a inbounds_array=()
+    inbounds_json=""
+    add_inbound() {
+        if [ -z "$inbounds_json" ]; then
+            inbounds_json="$1"
+        else
+            inbounds_json="$inbounds_json,$1"
+        fi
+    }
 
     # VLESS 入站规则
     if [[ -n "$VL_PORT" ]]; then
-        inbounds_array+=( "$(jq -n \
+        vless_inbound=$(jq -n \
             --argjson port "$vless_port" --arg uuid "$uuid" --arg pk "$private_key" \
-            '{"type":"vless","tag":"vless-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":$pk}}}')"
+            '{"type":"vless","tag":"vless-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"flow":"xtls-rprx-vision"}],"tls":{"enabled":true,"server_name":"www.iij.ad.jp","reality":{"enabled":true,"handshake":{"server":"www.iij.ad.jp","server_port":443},"private_key":$pk}}}')
+        add_inbound "$vless_inbound"
     fi
 
     # VMess (Argo) 入站规则
-    inbounds_array+=( "$(jq -n \
+    vmess_inbound=$(jq -n \
         --argjson port "$ARGO_PORT" --arg uuid "$uuid" \
-        '{"type":"vmess","tag":"vmess-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid}],"transport":{"type":"ws","path":"/vmess-argo"}}')"
+        '{"type":"vmess","tag":"vmess-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid}],"transport":{"type":"ws","path":"/vmess-argo"}}')
+    add_inbound "$vmess_inbound"
 
     # SOCKS 入站规则
     if [[ -n "$SK_PORT" ]]; then
-        inbounds_array+=( "$(jq -n \
+        socks_inbound=$(jq -n \
             --argjson port "$socks_port" --arg user "$socks_user" --arg pass "$socks_pass" \
-            '{"type":"socks","tag":"socks-in","listen":"::","listen_port":$port,"users":[{"username":$user,"password":$pass}]}')"
+            '{"type":"socks","tag":"socks-in","listen":"::","listen_port":$port,"users":[{"username":$user,"password":$pass}]}')
+        add_inbound "$socks_inbound"
     fi
 
     # Hysteria2 入站规则
     if [[ -n "$HY_PORT" ]]; then
-        inbounds_array+=( "$(jq -n \
+        hy2_inbound=$(jq -n \
             --argjson port "$hy2_port" --arg uuid "$uuid" \
-            '{"type":"hysteria2","tag":"hysteria2-in","listen":"::","listen_port":$port,"users":[{"password":$uuid}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}')"
+            '{"type":"hysteria2","tag":"hysteria2-in","listen":"::","listen_port":$port,"users":[{"password":$uuid}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}')
+        add_inbound "$hy2_inbound"
     fi
 
     # TUIC 入站规则
     if [[ -n "$TU_PORT" ]]; then
-        inbounds_array+=( "$(jq -n \
+        tuic_inbound=$(jq -n \
             --argjson port "$tuic_port" --arg uuid "$uuid" --arg pass "$password" \
-            '{"type":"tuic","tag":"tuic-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"password":$pass}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}')"
+            '{"type":"tuic","tag":"tuic-in","listen":"::","listen_port":$port,"users":[{"uuid":$uuid,"password":$pass}],"tls":{"enabled":true,"alpn":["h3"],"certificate_path":"/etc/sing-box/cert.pem","key_path":"/etc/sing-box/private.key"}}')
+        add_inbound "$tuic_inbound"
     fi
-
-    # 将数组中的 JSON 字符串用逗号连接
-    inbounds_json=$(printf ",%s" "${inbounds_array[@]}")
-    inbounds_json=${inbounds_json:1}
 
     # 写入基础配置文件
     cat > "${config_dir}" << EOF
