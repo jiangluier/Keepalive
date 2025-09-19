@@ -312,17 +312,17 @@ cat > "${config_dir}" << EOF
       }
     },
     {
-    "type": "socks",
-    "tag": "socks5",
-    "listen": "::",
-    "listen_port": $socks_port,
-    "users": [
+      "type": "socks",
+      "tag": "socks5",
+      "listen": "::",
+      "listen_port": $socks_port,
+      "users": [
         {
           "username": "$socks_user",
           "password": "$socks_pass"
         }
-    ]
-    }
+      ]
+    },
     {
       "type": "hysteria2",
       "tag": "hysteria2",
