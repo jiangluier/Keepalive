@@ -221,7 +221,7 @@ install_singbox() {
     # tar -xzvf "${work_dir}/${server_name}.tar.gz" -C "${work_dir}/" && \
     # mv "${work_dir}/sing-box-${latest_version}-linux-${ARCH}/sing-box" "${work_dir}/" && \
     # rm -rf "${work_dir}/${server_name}.tar.gz" "${work_dir}/sing-box-${latest_version}-linux-${ARCH}"
-    chown root:root ${work_dir} && chmod +x ${work_dir}/${server_name} ${work_dir}/argo ${work_dir}/qrencode
+    chown root:root ${work_dir} && chmod +x ${work_dir}/${server_name} ${work_dir}/argo
 
    # 生成随机端口和密码
     socks_port=$(($vless_port + 1))
