@@ -7,11 +7,18 @@ let CHAT_ID = "";    // Telegram聊天CHAT_ID,直接填写或设置环境变量�
 let BOT_TOKEN = "";    // Telegram机器人TOKEN,直接填写或设置环境变量，变量名：BOT_TOKEN
 
 // 应用配置 URL和应用名称配置(必填)
-// 注意：webhook 将根据这里的 URL 来匹配需要重启的应用。
-const MONITORED_APPS = [ // 格式: {url: "应用URL", name: "应用名称"}
-  { url: "https://laowang-sap-all-sg.cfapps.ap21.hana.ondemand.com", name: "laowang-sap-all-sg" },
-  { url: "https://laowang-sap-all-us.cfapps.us10-001.hana.ondemand.com", name: "laowang-sap-all-us" }
+const MONITORED_APP_URLS = [ // 格式: {url: "应用URL"}
+  { url: "https://laowang-sap-all-sg.cfapps.ap21.hana.ondemand.com" },
+  { url: "https://laowang-sap-all-us.cfapps.us10-001.hana.ondemand.com" }
 ];
+
+// 自动生成最终的 MONITORED_APPS 列表，自动提取 name 字段
+const MONITORED_APPS = MONITORED_APP_URLS
+  .map(app => ({
+    ...app,
+    name: extractAppNameFromUrl(app.url)
+  }))
+  .filter(app => app.name !== null); // 确保只保留有效配置
 
 // 区域固定常量(无需更改)
 const REGIONS = {
@@ -28,12 +35,25 @@ const REGIONS = {
 };
 
 // 工具函数
-const pad = n => String(n).padStart(2, "0");
+// const pad = n => String(n).padStart(2, "0");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const json = (o, c = 200) => new Response(JSON.stringify(o), {
   status: c,
   headers: { "content-type": "application/json" }
 });
+
+// 根据 URL 提取应用名称 (主机名的第一部分)
+function extractAppNameFromUrl(url) {
+  try {
+    // 解析 URL 并获取 hostname
+    const hostname = new URL(url).hostname;
+    // 返回第一个点号之前的部分，即应用名称
+    return hostname.split('.')[0];
+  } catch (e) {
+    console.error(`[config-error] 无法从 URL 提取应用名称: ${url}`);
+    return null; 
+  }
+}
 
 // Telegram 消息发送
 async function sendTelegramMessage(message) {
@@ -149,7 +169,7 @@ async function getUAAToken(email, password, uaaUrl) {
     console.log(`[auth] 响应状态: ${response.status}, 响应文本: ${text.substring(0, 200)}...`);
     
     if (!response.ok) {
-      throw new Error(`UAA token 错误: ${response.status} ${text}`);
+      throw new Error(`UAA token error: ${response.status} ${text}`);
     }
     
     const result = JSON.parse(text);
@@ -166,7 +186,7 @@ async function getAppGuidByName(apiUrl, token, appName) {
   if (result.resources && result.resources.length > 0) {
     return result.resources[0].guid;
   }
-  throw new Error(`未发现 ${appName} 应用`);
+  throw new Error(`Application ${appName} not found`);
 }
 
 // 应用状态函数
@@ -179,7 +199,7 @@ async function getWebProcessGuid(apiUrl, token, appGuid) {
   const result = await cfGET(`${apiUrl}/v3/apps/${appGuid}/processes`, token);
   const webProcess = result?.resources?.find(p => p?.type === "web") || result?.resources?.[0];
   if (!webProcess) {
-    throw new Error(`未发现 ${appName} 应用的 web 进程`);
+    throw new Error("No web process found on app");
   }
   return webProcess.guid;
 }
@@ -196,14 +216,14 @@ async function waitAppStarted(apiUrl, token, appGuid) {
   for (let i = 0; i < 8; i++) {
     await sleep(delay);
     state = await getAppState(apiUrl, token, appGuid);
-    console.log(`[应用状态检查] 尝试 ${i + 1}: ${state}`);
+    console.log(`[app-state-check] attempt ${i + 1}: ${state}`);
     
     if (state === "STARTED") break;
     delay = Math.min(delay * 1.6, 15000);
   }
   
   if (state !== "STARTED") {
-    throw new Error(`应用程序未及时启动，最终状态: ${state}`);
+    throw new Error(`App not STARTED in time, final state=${state}`);
   }
 }
 
@@ -215,7 +235,7 @@ async function waitProcessInstancesRunning(apiUrl, token, processGuid) {
     const instances = stats?.resources || [];
     const states = instances.map(it => it?.state);
     
-    console.log(`[进程实例状态检查] 尝试 ${i + 1}: ${states.join(",") || "无实例"}`);
+    console.log(`[proc-stats] attempt ${i + 1}: ${states.join(",") || "no-instances"}`);
     
     if (states.some(s => s === "RUNNING")) return;
     
@@ -223,7 +243,7 @@ async function waitProcessInstancesRunning(apiUrl, token, processGuid) {
     delay = Math.min(delay * 1.6, 15000);
   }
   
-  throw new Error("进程实例未及时运行，最终状态: " + states.join(","));
+  throw new Error("Process instances not RUNNING in time");
 }
 
 // APP URL 检查函数 
@@ -233,10 +253,10 @@ async function checkAppUrl(appUrl) {
       method: "GET",
       signal: AbortSignal.timeout(30000)
     });
-    console.log(`[APP URL 检查] ${appUrl} 状态: ${response.status}`);
+    console.log(`[app-check] ${appUrl} status: ${response.status}`);
     return response.status === 200;
   } catch (error) {
-    console.log(`[APP URL 检查] ${appUrl} 错误: ${error.message}`);
+    console.log(`[app-check] ${appUrl} error: ${error.message}`);
     return false;
   }
 }
@@ -280,6 +300,7 @@ function generateStatusPage(apps) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SAP Cloud 应用状态监控</title>
+  <link rel="icon" href="https://www.sap.cn/favicon.ico">
   <style>
     :root {
       --up-color: #4CAF50;
@@ -480,11 +501,10 @@ function generateStatusPage(apps) {
     </div>
     
     <footer>
-      <p>SAP Cloud 多应用自动保活系统</p>
       <div class="footer-links">
-        <a href="https://github.com/eooce/Auto-deploy-sap-and-keepalive" target="_blank">GitHub</a>
-        <a href="https://www.youtube.com/@eooce" target="_blank">YouTube</a>
-        <a href="https://t.me/eooceu" target="_blank">Telegram Group</a>
+        <a href="https://github.com/yutian81/Keepalive/tree/main/webhook-action" target="_blank">Yutian81 GitHub</a>
+        <a href="https://blog.811520.xyz/post/2025/09/250916-uptime-action/" target="_blank">QingYun Blog</a>
+        <a href="https://github.com/eooce/Auto-deploy-sap-and-keepalive" target="_blank">Eooce Github</a>
       </div>
       <p>&copy; ${new Date().getFullYear()} Auto-SAP. All rights reserved.</p>
     </footer>
@@ -619,8 +639,9 @@ export default {
     const url = new URL(request.url);
     
     try {
-      // *** 新增 Webhook 触发端点 ***
-      if (url.pathname === "/webhook/restart" && request.method === "GET") {
+      // Webhook 触发端点
+      // 允许 GET 或 POST 请求，只要 URL 中包含 appUrl 参数即可
+      if (url.pathname === "/webhook/restart" && (request.method === "GET" || request.method === "POST")) {
         const appUrl = url.searchParams.get('appUrl');
         
         if (!appUrl) {
@@ -653,9 +674,8 @@ export default {
         });
       }
       
-      // 手动启动端点 (保留，但改为一次性启动所有)
+      // 手动启动端点 (保留，但建议用户使用 /webhook/restart)
       if (url.pathname === "/start") {
-        // 为了安全，手动启动也应该只针对离线应用。这里使用 monitorAllApps 进行 URL 检查，并对所有离线的应用发送一个 Webhook 请求（模拟）。
         return json({ ok: false, msg: "请使用 /webhook/restart?appUrl=... 触发单个应用重启" }, 400);
       }
       
@@ -670,13 +690,13 @@ export default {
       }
       
       // 默认响应
-      return new Response("SAP 自动保活 Worker 运行中");
+      return new Response("SAP Cloud 自动保活 Worker 运行中");
       
     } catch (error) {
       console.error("[error]", error?.message || error);
       return json({ ok: false, error: String(error) }, 500);
     }
-  },
+  }
 
   // 定时任务处理 (按要求，禁用自动重启逻辑，仅保留空壳)
   /*
@@ -690,5 +710,6 @@ export default {
       console.error("[cron-error]", error?.message || error);
     }
   }
-    */
+  */
+
 };
