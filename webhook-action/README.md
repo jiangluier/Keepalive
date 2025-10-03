@@ -1,13 +1,37 @@
+# 方法一：uptime webhook 通知 —— CF Worker 启动
+
+> **优势：不依赖 github action，没有 action 排队问题，保活更及时**
+
+## 部署 webhook 通知 API
+
+- 代码：`sap-webhook-cf.js`
+- 环境变量
+  - EMAIL=sap登录邮箱，必须
+  - PASSWORD=sap登录密码，必须
+  - CHAT_ID=TG机器人或频道ID，可选
+  - BOT_TOKEN=TG机器人Token，可选
+
+## uptime kuma 通知设置
+
+- **显示名称**：填一个易于分辨的名称，如 `SAP离线`
+- **通知类型**: `Webhook`
+- **Post URL**: `https://上面部署的worker地址/webhook/restart?appUrl=[URL]`
+- **请求体**: 选择 `预设 - application/json` (然后不要在下方出现的任何文本框中填写内容)
+- **额外 Header**: 保持 `禁用` 状态
+- **保存**
+
+---
+
+# 方法二：uptime webhook 通知 —— github action 启动
+
 ## 部署 worker api
 
-这是一个 Cloudflare Worker 脚本，用于接收来自 Uptime Kuma 的 Webhook 请求，并将其转发到 GitHub Actions 进行处理。
+- 代码：`uptime-webhook.js`
+- 环境变量：
+  - `GITHUB_TOKEN` = <您的GitHub Personal Access Token>，该令牌需要有触发 GitHub Actions 的权限
+  - `SECRET_TOKEN` = <设置的密码>，用于验证请求来源，以保护API端点的安全
 
-请确保在 Cloudflare Worker 的环境变量(Secrets)中设置以下变量：
-
-- `GITHUB_TOKEN` = <您的GitHub Personal Access Token>，该令牌需要有触发 GitHub Actions 的权限
-- `SECRET_TOKEN` = <设置的密码>，用于验证请求来源，以保护API端点的安全
-
-部署此脚本后，将 Uptime Kuma 的 Webhook URL 设置为：
+- 部署此脚本后，将 Uptime Kuma 的 Webhook URL 设置为：
 
 ```
 https://<Worker地址>?token=<设置的密码>&user=<GitHub用户名>&repo=<GitHub仓库名>
@@ -64,7 +88,7 @@ curl -X POST \
 
 - **显示名称**：填一个易于分辨的名称，如 `SAP离线`
 - **通知类型**: `Webhook`
-- **Post URL**: `https://<你的Worker地址>?token=<你的密码>&user=<你的用户名>&repo=<你的仓库名>` (请确保此URL完整且正确)
+- **Post URL**: 上述两种防范二选一 (请确保此URL完整且正确)
 - **请求体**: 选择 `预设 - application/json` (然后不要在下方出现的任何文本框中填写内容)
 - **额外 Header**: 保持 `禁用` 状态
 - **保存**
