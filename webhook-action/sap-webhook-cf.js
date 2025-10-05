@@ -8,8 +8,8 @@ let BOT_TOKEN = "";    // Telegram机器人TOKEN,直接填写或设置环境变�
 
 // 应用配置 URL和应用名称配置(必填)
 const MONITORED_APP_URLS = [ // 格式: {url: "应用URL"}
-  { url: "https://xxxxxxxxxxxxxxxxx.cfapps.ap21.hana.ondemand.com" },
-  { url: "https://xxxxxxxxxxxxxxxxx.cfapps.us10-001.hana.ondemand.com" }
+  { url: "https://laowang-sap-all-sg.cfapps.ap21.hana.ondemand.com" },
+  { url: "https://laowang-sap-all-us.cfapps.us10-001.hana.ondemand.com" }
 ];
 
 // 自动生成最终的 MONITORED_APPS 列表，自动提取 name 字段
@@ -587,7 +587,7 @@ async function ensureAppRunning(appConfig, reason = "unknown") {
   
   console.log(`[trigger] ${reason} for app ${name} at ${new Date().toISOString()}`);
   
-  // 第一步：检查应用URL状态
+  // 检查应用URL状态
   const isAppHealthy = await checkAppUrl(url);
   if (isAppHealthy) {
     console.log(`[decision] ${url} 返回200，应用正常运行，无需启动`);
@@ -600,49 +600,51 @@ async function ensureAppRunning(appConfig, reason = "unknown") {
   const offlineMessage = `⚠️ *SAP应用离线提醒*\n\n应用名称: ${name}\n应用URL: ${url}\n触发原因: ${reason}\n时间: ${formattedTime}\n\n正在尝试重启应用...`;
   await sendTelegramMessage(offlineMessage);
   
-  console.log(`[decision] ${url} 状态异常，开始启动应用`);
+  console.log(`[decision] ${url} 状态异常，开始执行重启流程`);
   
-  // 第二步：确定区域
+  // 确定区域
   const detectedRegion = detectRegionFromUrl(url);
   if (!detectedRegion || !REGIONS[detectedRegion]) {
     throw new Error(`无法确定应用 ${name} 的区域，URL: ${url}`);
   }
-  
   const regionConfig = REGIONS[detectedRegion];
   console.log(`[region] 应用 ${name} 的区域: ${detectedRegion}`);
   
-  // 第三步：获取CF API访问令牌
+  // 获取CF API访问令牌
   const token = await getUAAToken(email, password, regionConfig.UAA_URL);
   
-  // 第四步：根据应用名称获取GUID
+  // 根据应用名称获取GUID
   const appGuid = await getAppGuidByName(regionConfig.CF_API, token, name);
   console.log(`[app-guid] ${appGuid}`);
   
-  // 第五步：获取进程信息
+  // 获取进程信息
   const processGuid = await getWebProcessGuid(regionConfig.CF_API, token, appGuid);
   
-  // 第六步：检查当前应用状态
-  const appState = await getAppState(regionConfig.CF_API, token, appGuid);
-  console.log(`[app-state-before] ${appState}`);
-  
-  // 第七步：启动应用（如果需要）
-  if (appState !== "STARTED") {
+  // 强制执行重启操作（无论当前状态是否为 STARTED）
+  try {
+    console.log(`[action] 强制重启应用: ${name}`);
+    await cfPOST(`${regionConfig.CF_API}/v3/apps/${appGuid}/actions/restart`, token);
+    console.log("[action] 应用重启请求已发送");
+  } catch (e) {
+    // 如果重启失败（例如，应用可能确实是 STOPPED 状态），尝试启动
+    console.warn(`[action-warning] 重启失败，尝试发送启动请求: ${e.message}`);
     await cfPOST(`${regionConfig.CF_API}/v3/apps/${appGuid}/actions/start`, token);
     console.log("[action] 应用启动请求已发送");
   }
   
-  // 第八步：等待应用启动完成
+  // 等待应用启动完成
   try {
-    await waitAppStarted(regionConfig.CF_API, token, appGuid);
+    await waitAppStarted(regionConfig.CF_API, token, appGuid); 
     await waitProcessInstancesRunning(regionConfig.CF_API, token, processGuid);
   } catch (e) {
     console.error(`[wait-error] 应用未能在规定时间启动或运行: ${e.message}`);
     const failedMessage = `❌ *SAP应用重启失败（启动超时）*\n\n应用名称: ${name}\n应用URL: ${url}\n时间: ${formatShanghaiTime(new Date())}\n\n错误信息: ${e.message}`;
     await sendTelegramMessage(failedMessage);
-    throw e;
+    // 抛出错误，以便 Webhook 调用的 ctx.waitUntil 捕获
+    throw e; 
   }
   
-  // 第九步：再次检查应用URL确保启动成功
+  // 再次检查应用URL确保启动成功
   console.log("[verification] 验证应用是否成功启动...");
   await sleep(5000);
   
@@ -652,13 +654,13 @@ async function ensureAppRunning(appConfig, reason = "unknown") {
     // 发送重启成功提醒
     const successMessage = `✅ *SAP应用重启成功*\n\n应用名称: ${name}\n应用URL: ${url}\n时间: ${formatShanghaiTime(new Date())}`;
     await sendTelegramMessage(successMessage);
-    return { app: name, status: "started_healthy", url: url, healthy: true };
+    return { app: name, status: "restarted_healthy", url: url, healthy: true };
   } else {
     console.log("[warning] 应用启动完成但URL状态仍异常，可能需要更多时间或存在其他问题");
     // 发送重启失败提醒
     const failedMessage = `❌ *SAP应用重启失败（URL仍异常）*\n\n应用名称: ${name}\n应用URL: ${url}\n时间: ${formatShanghaiTime(new Date())}`;
     await sendTelegramMessage(failedMessage);
-    return { app: name, status: "started_but_unhealthy", url: url, healthy: false };
+    return { app: name, status: "restarted_but_unhealthy", url: url, healthy: false };
   }
 }
 
