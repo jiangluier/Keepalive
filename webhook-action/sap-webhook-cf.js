@@ -8,8 +8,8 @@ let BOT_TOKEN = "";    // Telegram机器人TOKEN,直接填写或设置环境变�
 
 // 应用配置 URL和应用名称配置(必填)
 const MONITORED_APP_URLS = [ // 格式: {url: "应用URL"}
-  { url: "https://laowang-sap-all-sg.cfapps.ap21.hana.ondemand.com" },
-  { url: "https://laowang-sap-all-us.cfapps.us10-001.hana.ondemand.com" }
+  { url: "https://xxxxxxxxxxxxxxxxx.cfapps.ap21.hana.ondemand.com" },
+  { url: "https://xxxxxxxxxxxxxxxxx.cfapps.us10-001.hana.ondemand.com" }
 ];
 
 // 自动生成最终的 MONITORED_APPS 列表，自动提取 name 字段
@@ -189,6 +189,47 @@ async function getAppGuidByName(apiUrl, token, appName) {
   throw new Error(`Application ${appName} not found`);
 }
 
+// 应用元数据获取函数 (组织、空间、内存、硬盘)
+async function getAppMetadata(apiUrl, token, appGuid) {
+  try {
+    // 获取进程详情 (用于提取内存和硬盘大小)
+    const processResult = await cfGET(`${apiUrl}/v3/apps/${appGuid}/processes`, token);
+    const webProcess = processResult.resources?.find(p => p.type === "web");
+    const memory = webProcess?.memory_in_mb || 0;
+    const disk = webProcess?.disk_in_mb || 0;
+
+    // 获取应用详情 (用于提取 Space GUID)
+    const appDetails = await cfGET(`${apiUrl}/v3/apps/${appGuid}`, token);
+    const spaceGuid = appDetails.relationships?.space?.data?.guid;
+    
+    if (!spaceGuid) {
+      return { memory: `${memory} MB`, disk: `${disk} MB`, org: "N/A", space: "N/A" };
+    }
+
+    // 获取 Space 详情 (用于提取 Space 名称和 Org GUID)
+    const spaceDetails = await cfGET(`${apiUrl}/v3/spaces/${spaceGuid}`, token);
+    const spaceName = spaceDetails.name;
+    const orgGuid = spaceDetails.relationships?.organization?.data?.guid;
+
+    // 获取 Org 详情 (用于提取 Org 名称)
+    let orgName = "N/A";
+    if (orgGuid) {
+      const orgDetails = await cfGET(`${apiUrl}/v3/organizations/${orgGuid}`, token);
+      orgName = orgDetails.name;
+    }
+
+    return { 
+      memory: `${memory} MB`, 
+      disk: `${disk} MB`, 
+      org: orgName, 
+      space: spaceName 
+    };
+  } catch (e) {
+    console.error(`[metadata-error] 获取应用元数据失败: ${e.message}`);
+    return { memory: "N/A", disk: "N/A", org: "N/A", space: "N/A" };
+  }
+}
+
 // 应用状态函数
 async function getAppState(apiUrl, token, appGuid) {
   const result = await cfGET(`${apiUrl}/v3/apps/${appGuid}`, token);
@@ -283,10 +324,11 @@ function generateStatusPage(apps) {
       <div class="status-card ${statusClass}">
         <div class="card-header">
           <h3>${app.app}</h3>
-          <span class="status-indicator ${statusClass}">${statusText}</span>
+            <span class="status-indicator ${statusClass}">${statusText}</span>
         </div>
         <div class="card-body">
-          <p><strong>区域:</strong> ${regionName}</p>
+          <p><strong>区域:</strong> ${regionName}&nbsp;&nbsp;|&nbsp;&nbsp;<strong>内存:</strong> ${app.memory || 'N/A'}&nbsp;&nbsp;|&nbsp;&nbsp;<strong>硬盘:</strong> ${app.disk || 'N/A'}</p>
+          <p><strong>组织:</strong> ${app.org || 'N/A'}&nbsp;&nbsp;|&nbsp;&nbsp;<strong>空间:</strong> ${app.space || 'N/A'}</p>
           <p><strong>URL:</strong> <a href="${app.url}" target="_blank">${app.url}</a></p>
         </div>
       </div>
@@ -321,7 +363,7 @@ function generateStatusPage(apps) {
     }
     
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 20px;
       text-align: center;
@@ -329,31 +371,40 @@ function generateStatusPage(apps) {
     
     header {
       text-align: center;
-      padding: 30px 0;
-      background: #667eea;
-      color: white;
-      border-radius: var(--border-radius);
-      margin-bottom: 30px;
-      box-shadow: var(--box-shadow);
+      padding: 30px 0 0 0;
+      color: var(--text-color);
+      margin-bottom: 0;
     }
     
     h1 {
       margin: 0;
       font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
     }
     
     .subtitle {
       font-size: 1.2rem;
       opacity: 0.9;
       margin-top: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
     }
     
     .status-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      display: flex; 
+      flex-wrap: wrap; 
+      justify-content: center;
       gap: 20px;
       margin: 0 auto;
-      max-width: 800px;
+      max-width: 1400px;
       width: 100%;
     }
     
@@ -363,9 +414,12 @@ function generateStatusPage(apps) {
       box-shadow: var(--box-shadow);
       overflow: hidden;
       transition: transform 0.3s ease, box-shadow 0.3s ease;
-      margin: 0 auto;
+      flex-grow: 0;
+      flex-shrink: 1; 
+      flex-basis: 450px; 
+      max-width: calc(33.333% - 14px); 
     }
-    
+
     .status-card:hover {
       transform: translateY(-5px);
       box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
@@ -403,6 +457,7 @@ function generateStatusPage(apps) {
     
     .card-body {
       padding: 20px;
+      font-size: 0.9rem;
     }
     
     .card-body p {
@@ -422,7 +477,7 @@ function generateStatusPage(apps) {
       text-align: center;
       color: #666;
       font-size: 0.9rem;
-      margin-top: 20px;
+      margin-top: 30px;
     }
     
     .controls {
@@ -469,12 +524,18 @@ function generateStatusPage(apps) {
     .footer-links a:hover {
       text-decoration: underline;
     }
+
+    @media (max-width: 1100px) {
+      .status-card {
+          max-width: calc(50% - 10px);
+      }
+    }    
     
     @media (max-width: 768px) {
       .status-grid {
-        grid-template-columns: 1fr;
+        max-width: 100%;
+        flex-basis: 100%;
       }
-      
       h1 {
         font-size: 2rem;
       }
@@ -601,31 +662,61 @@ async function ensureAppRunning(appConfig, reason = "unknown") {
   }
 }
 
-// 监控所有应用 (仅用于 /status 和 /)
+// 监控所有应用 (用于 /status 和 /)
 async function monitorAllApps(reason = "unknown") {
   console.log(`[monitor-start] 开始监控所有应用: ${reason}`);
   const results = [];
   
+  // 使用对象存储令牌，避免重复认证
+  const regionTokens = {};
+
   for (const app of MONITORED_APPS) {
+    const detectedRegion = detectRegionFromUrl(app.url);
+    const regionConfig = REGIONS[detectedRegion];
+
+    let isHealthy = false;
+    let metadata = { org: "N/A", space: "N/A", memory: "N/A", disk: "N/A" };
+
     try {
-      // 这里的检查只是快速的 URL 检查，不触发重启逻辑
-      const isHealthy = await checkAppUrl(app.url);
-      results.push({
-        app: app.name,
-        url: app.url,
-        healthy: isHealthy,
-        region: detectRegionFromUrl(app.url)
-      });
+      // 快速 URL 健康检查
+      isHealthy = await checkAppUrl(app.url);
+
+      if (!regionConfig) {
+        throw new Error(`无法确定区域: ${app.url}`);
+      }
+      
+      // 获取令牌 (如果尚未获取)
+      if (!regionTokens[detectedRegion]) {
+        regionTokens[detectedRegion] = await getUAAToken(email, password, regionConfig.UAA_URL);
+      }
+      const token = regionTokens[detectedRegion];
+      
+      // 获取应用 GUID
+      const appGuid = await getAppGuidByName(regionConfig.CF_API, token, app.name);
+
+      // 获取详细元数据 (组织、空间、内存、硬盘)
+      metadata = await getAppMetadata(regionConfig.CF_API, token, appGuid);
+
     } catch (error) {
       console.error(`[app-error] 检查应用 ${app.name} 时出错:`, error.message);
-      results.push({ app: app.name, status: "error", error: error.message, url: app.url, healthy: false });
+      // 如果出现错误，isHealthy 保持 false (或由 checkAppUrl 确定)，metadata 保持 N/A
     }
+    
+    results.push({
+      app: app.name,
+      url: app.url,
+      healthy: isHealthy,
+      region: detectedRegion,
+      org: metadata.org,
+      space: metadata.space,
+      memory: metadata.memory,
+      disk: metadata.disk
+    });
   }
   
   console.log(`[monitor-complete] 所有应用状态检查完成`);
   return results;
 }
-
 
 export default {
   // HTTP 请求处理
