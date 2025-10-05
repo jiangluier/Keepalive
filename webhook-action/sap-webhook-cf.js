@@ -8,8 +8,8 @@ let BOT_TOKEN = "";    // Telegram机器人TOKEN,直接填写或设置环境变�
 
 // 应用配置 URL和应用名称配置(必填)
 const MONITORED_APP_URLS = [ // 格式: {url: "应用URL"}
-  { url: "https://laowang-sap-all-sg.cfapps.ap21.hana.ondemand.com" },
-  { url: "https://laowang-sap-all-us.cfapps.us10-001.hana.ondemand.com" }
+  { url: "https://xxxxxxxxxxxxxxxxx.cfapps.ap21.hana.ondemand.com" },
+  { url: "https://xxxxxxxxxxxxxxxxx.cfapps.us10-001.hana.ondemand.com" }
 ];
 
 // 自动生成最终的 MONITORED_APPS 列表，自动提取 name 字段
@@ -35,7 +35,6 @@ const REGIONS = {
 };
 
 // 工具函数
-// const pad = n => String(n).padStart(2, "0");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const json = (o, c = 200) => new Response(JSON.stringify(o), {
   status: c,
@@ -186,7 +185,7 @@ async function getAppGuidByName(apiUrl, token, appName) {
   if (result.resources && result.resources.length > 0) {
     return result.resources[0].guid;
   }
-  throw new Error(`Application ${appName} not found`);
+  throw new Error(`未找到应用: ${appName}`);
 }
 
 // 应用元数据获取函数 (组织、空间、内存、硬盘)
@@ -240,7 +239,7 @@ async function getWebProcessGuid(apiUrl, token, appGuid) {
   const result = await cfGET(`${apiUrl}/v3/apps/${appGuid}/processes`, token);
   const webProcess = result?.resources?.find(p => p?.type === "web") || result?.resources?.[0];
   if (!webProcess) {
-    throw new Error("No web process found on app");
+    throw new Error("在应用程序上找不到Web进程");
   }
   return webProcess.guid;
 }
@@ -264,27 +263,25 @@ async function waitAppStarted(apiUrl, token, appGuid) {
   }
   
   if (state !== "STARTED") {
-    throw new Error(`App not STARTED in time, final state=${state}`);
+    throw new Error(`应用程序未及时启动，最终状态: ${state}`);
   }
 }
 
 async function waitProcessInstancesRunning(apiUrl, token, processGuid) {
   let delay = 2000;
-  
-  for (let i = 0; i < 10; i++) {
+
+  // 重试6次，避免 Worker 后台任务超时
+  for (let i = 0; i < 6; i++) { 
     const stats = await getProcessStats(apiUrl, token, processGuid);
     const instances = stats?.resources || [];
     const states = instances.map(it => it?.state);
-    
     console.log(`[proc-stats] attempt ${i + 1}: ${states.join(",") || "no-instances"}`);
-    
+
     if (states.some(s => s === "RUNNING")) return;
-    
-    await sleep(delay);
-    delay = Math.min(delay * 1.6, 15000);
+      await sleep(delay);
+      delay = Math.min(delay * 1.6, 10000); 
   }
-  
-  throw new Error("Process instances not RUNNING in time");
+  throw new Error("进程实例未及时运行");
 }
 
 // APP URL 检查函数 
