@@ -1,24 +1,12 @@
 // 环境变量配置(必填)
-let email = "你的sap登录邮箱";    // SAP登录邮箱,直接填写或设置环境变量，变量名：EMAIL
+let email = "你的sap登录邮箱";       // SAP登录邮箱,直接填写或设置环境变量，变量名：EMAIL
 let password = "你的sap登录密码";    // SAP登录密码,直接填写或设置环境变量，变量名：PASSWORD
+let APP_URLS = "";                  // SAP应用URL，支持每行填写一个URL，变量名：APP_URLS
+let MONITORED_APPS = [];            // 请勿修改
 
 // 离线重启通知 Telegram配置(可选)
 let CHAT_ID = "";    // Telegram聊天CHAT_ID,直接填写或设置环境变量，变量名：CHAT_ID
 let BOT_TOKEN = "";    // Telegram机器人TOKEN,直接填写或设置环境变量，变量名：BOT_TOKEN
-
-// 应用配置 URL和应用名称配置(必填)
-const MONITORED_APP_URLS = [ // 格式: {url: "应用URL"}
-  { url: "https://xxxxxxxxxxxxxxxxx.cfapps.ap21.hana.ondemand.com" },
-  { url: "https://xxxxxxxxxxxxxxxxx.cfapps.us10-001.hana.ondemand.com" }
-];
-
-// 自动生成最终的 MONITORED_APPS 列表，自动提取 name 字段
-const MONITORED_APPS = MONITORED_APP_URLS
-  .map(app => ({
-    ...app,
-    name: extractAppNameFromUrl(app.url)
-  }))
-  .filter(app => app.name !== null); // 确保只保留有效配置
 
 // 区域固定常量(无需更改)
 const REGIONS = {
@@ -53,6 +41,24 @@ function extractAppNameFromUrl(url) {
     return null; 
   }
 }
+
+// 初始化应用列表
+function initializeAppsList(appUrlsString) {
+  if (!appUrlsString) {
+    console.warn("[config-warning] APP_URLS 环境变量为空。请在 Worker 设置中配置应用 URL。");
+    return [];
+  }
+
+  return appUrlsString
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.startsWith('http'))
+    .map(url => ({
+      url: url,
+      name: extractAppNameFromUrl(url)
+    }))
+    .filter(app => app.name !== null);
+  }
 
 // Telegram 消息发送
 async function sendTelegramMessage(message) {
@@ -97,7 +103,8 @@ function formatShanghaiTime(date) {
            String(shanghaiTime.getMonth() + 1).padStart(2, '0') + '-' + 
            String(shanghaiTime.getDate()).padStart(2, '0') + ' ' +
            String(shanghaiTime.getHours()).padStart(2, '0') + ':' +
-           String(shanghaiTime.getMinutes()).padStart(2, '0');
+           String(shanghaiTime.getMinutes()).padStart(2, '0') + ':' +
+           String(shanghaiTime.getSeconds()).padStart(2, '0');
 }
 
 // 根据URL识别区域
@@ -302,15 +309,8 @@ async function checkAppUrl(appUrl) {
 // 首页
 function generateStatusPage(apps) {
   // 获取当前时间并转换为上海时间（北京时间）
-  const now = new Date();
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const shanghaiTime = new Date(utcTime + (8 * 60 * 60 * 1000));
-  
-  const formattedDate = shanghaiTime.getFullYear() + '-' + 
-                       String(shanghaiTime.getMonth() + 1).padStart(2, '0') + '-' + 
-                       String(shanghaiTime.getDate()).padStart(2, '0') + ' ' +
-                       String(shanghaiTime.getHours()).padStart(2, '0') + ':' +
-                       String(shanghaiTime.getMinutes()).padStart(2, '0');
+	const now = new Date();
+	const formattedDate = formatShanghaiTime(now); // 替换了重复的时间转换逻辑
   
   const statusCards = apps.map(app => {
     const statusClass = app.healthy ? 'status-up' : 'status-down';
@@ -723,14 +723,22 @@ export default {
     // 从环境变量获取配置
     email = env.EMAIL || email;
     password = env.PASSWORD || password;
+    APP_URLS = env.APP_URLS;
+    MONITORED_APPS = initializeAppsList(APP_URLS);
     CHAT_ID = env.CHAT_ID || CHAT_ID;
     BOT_TOKEN = env.BOT_TOKEN || BOT_TOKEN;
-    
+
+    if (MONITORED_APPS.length === 0 && !request.url.includes("/webhook/restart")) {
+      // 如果应用列表为空，且不是重启请求，则返回配置错误页面
+      return new Response(generateStatusPage([]), {
+        headers: { "content-type": "text/html;charset=UTF-8" }
+      });
+    }    
+
     const url = new URL(request.url);
     
     try {
-      // Webhook 触发端点
-      // 允许 GET 或 POST 请求，只要 URL 中包含 appUrl 参数即可
+      // Webhook 触发端点，允许 GET 或 POST 请求，只要 URL 中包含 appUrl 参数即可
       if (url.pathname === "/webhook/restart" && (request.method === "GET" || request.method === "POST")) {
         const appUrl = url.searchParams.get('appUrl');
         
@@ -789,17 +797,25 @@ export default {
   }
 
   // 定时任务处理 (按要求，禁用自动重启逻辑，仅保留空壳)
-  /*
-  async scheduled(event, env, ctx) {
-    try {
-      // 仅用于 /status 页面刷新，不触发重启
-      console.log(`[cron-disabled] 定时任务触发: ${event.cron}，根据用户要求，此任务不会触发应用重启。`);
-      // 如果需要保留周期性健康检查，可以取消注释下面这行，但它不会触发重启。
-      // ctx.waitUntil(monitorAllApps("cron-check")); 
-    } catch (error) {
-      console.error("[cron-error]", error?.message || error);
-    }
-  }
-  */
+    /*
+    async scheduled(event, env, ctx) {
+      // 从环境变量获取配置
+      email = env.EMAIL || email;
+      password = env.PASSWORD || password;
+      CHAT_ID = env.CHAT_ID || CHAT_ID;
+      BOT_TOKEN = env.BOT_TOKEN || BOT_TOKEN;
+      APP_URLS = env.APP_URLS;
+      MONITORED_APPS = initializeAppsList(APP_URLS);
+  
+      try {
+        // 仅用于 /status 页面刷新，不触发重启
+        console.log(`[cron-disabled] 定时任务触发: ${event.cron}，根据用户要求，此任务不会触发应用重启。`);
+        // 如果需要保留周期性健康检查，可以取消注释下面这行，但它不会触发重启。
+        // ctx.waitUntil(monitorAllApps("cron-check")); 
+      } catch (error) {
+        console.error("[cron-error]", error?.message || error);
+      }
+    }
+    */
 
 };
