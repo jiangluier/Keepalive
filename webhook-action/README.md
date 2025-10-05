@@ -8,6 +8,7 @@
 - 环境变量
   - EMAIL=sap登录邮箱，必须
   - PASSWORD=sap登录密码，必须
+  - APP_URLS=SAP应用的URL地址，多个地址可每行填写1个，必须
   - CHAT_ID=TG机器人或频道ID，可选
   - BOT_TOKEN=TG机器人Token，可选
 
