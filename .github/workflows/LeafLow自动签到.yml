@@ -17,18 +17,18 @@ jobs:
           python-version: '3.9'
           
       - name: Install dependencies
-        working-directory: ./leaflow-chechin 
+        working-directory: leaflow-chechin 
         run: |
           pip install requests
           
       - name: Prepare config
-        working-directory: ./leaflow-chechin
+        working-directory: leaflow-chechin
         run: python3 get_tokens_helper.py
         env:
           LEAFLOW_COOKIES: ${{ secrets.LEAFLOW_COOKIES }}
           
       - name: Run checkin
-        working-directory: ./leaflow-chechin
+        working-directory: leaflow-chechin
         run: python3 checkin_token.py --notify
         env:
           QYWX_KEY: ${{ secrets.QYWX_KEY }}
