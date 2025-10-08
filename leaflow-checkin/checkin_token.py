@@ -285,7 +285,7 @@ class LeafLowTokenCheckin:
             total_count += 1
             # 优先使用配置中的 'name' 字段，如果不存在则使用默认的 "账号N"
             account_name = account.get('name', f"账号{account_index + 1}") 
-            self.logger.info(f"\n📋 正在处理 {account_name}...")
+            self.logger.info(f"\n📋 正在处理账户 {account_name}...")
             
             success, message = self.perform_token_checkin(account, account_name)
             results.append({
@@ -370,4 +370,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
