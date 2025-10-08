@@ -1,7 +1,43 @@
 `LEAFLOW_COOKIES` 格式
+
 ```
 张三|cookie_string_for_zhangsan
 李四|cookie_string_for_lisi
+```
+
+`config.accounts.json` 格式
+
+```json
+{
+  "settings": {
+    "log_level": "INFO",
+    "retry_delay": 5,
+    "timeout": 30,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+  },
+  "accounts": [
+    {
+      "name": "张三",
+      "token_data": {
+        "cookies": {
+          "leaflow_session": "your_session_token",
+          "remember_web_59ba36addc2b2f9401580f014c7f58ea4e30989d": "your_remember_token",
+          "XSRF-TOKEN": "your_csrf_token"
+        }
+      }
+    },
+    {
+      "name": "李四",
+      "token_data": {
+        "cookies": {
+          "leaflow_session": "your_session_token",
+          "remember_web_59ba36addc2b2f9401580f014c7f58ea4e30989d": "your_remember_token",
+          "XSRF-TOKEN": "your_csrf_token"
+        }
+      }
+    }
+  ]
+}
 ```
 
 
@@ -361,4 +397,5 @@ python3 checkin_token.py --debug
 ## 简体中文
 
 *本文档默认为中文版本，英文版本请查看 [README_EN.md](README_EN.md)*
+
 
