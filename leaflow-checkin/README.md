@@ -1,3 +1,10 @@
+`LEAFLOW_COOKIES` 格式
+```
+张三|cookie_string_for_zhangsan
+李四|cookie_string_for_lisi
+```
+
+
 # LeafLow 自动签到脚本
 
 [![Python Version](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/)
@@ -55,19 +62,36 @@ python3 get_tokens_helper.py
 #### 方法A: 手动创建 `config.accounts.json`
 
 ```json
-{
-  "accounts": [
-    {
-      "token_data": {
-        "cookies": {
-          "leaflow_session": "your_session_token",
-          "remember_web_59ba36addc2b2f9401580f014c7f58ea4e30989d": "your_remember_token",
-          "XSRF-TOKEN": "your_csrf_token"
+"accounts": [
+  {
+    "name": "张三",
+    "accounts": [
+      {
+        "token_data": {
+          "cookies": {
+            "leaflow_session": "your_session_token",
+            "remember_web_59ba36addc2b2f9401580f014c7f58ea4e30989d": "your_remember_token",
+            "XSRF-TOKEN": "your_csrf_token"
+          }
         }
       }
-    }
-  ]
-}
+    ]
+  },
+  {
+    "name": "李四",
+    "accounts": [
+      {
+        "token_data": {
+          "cookies": {
+            "leaflow_session": "your_session_token",
+            "remember_web_59ba36addc2b2f9401580f014c7f58ea4e30989d": "your_remember_token",
+            "XSRF-TOKEN": "your_csrf_token"
+          }
+        }
+      }
+    ]
+  }
+]
 ```
 
 #### 方法B: 使用 `get_tokens_helper.py` 生成配置 (推荐)
@@ -337,3 +361,4 @@ python3 checkin_token.py --debug
 ## 简体中文
 
 *本文档默认为中文版本，英文版本请查看 [README_EN.md](README_EN.md)*
+
