@@ -36,10 +36,10 @@ class LeafLowTokenCheckin:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
-            print(f"Configuration file {self.config_file} not found")
+            print(f"配置文件 {self.config_file} 未找到")
             sys.exit(1)
         except json.JSONDecodeError:
-            print(f"Configuration file {self.config_file} format error")
+            print(f"配置文件 {self.config_file} 格式错误")
             sys.exit(1)
     
     def setup_logging(self):
@@ -100,22 +100,22 @@ class LeafLowTokenCheckin:
                 if response.status_code == 200:
                     content = response.text.lower()
                     if any(indicator in content for indicator in ['dashboard', 'profile', 'user', 'logout', 'welcome']):
-                        self.logger.info(f"✅ [{account_name}] Authentication valid")
-                        return True, "Authentication successful"
+                        self.logger.info(f"✅ [{account_name}] 身份验证有效")
+                        return True, "身份验证成功"
                 elif response.status_code in [301, 302, 303]:
                     location = response.headers.get('location', '')
                     if 'login' not in location.lower():
-                        self.logger.info(f"✅ [{account_name}] Authentication valid (redirect)")
-                        return True, "Authentication successful (redirect)"
+                        self.logger.info(f"✅ [{account_name}] 身份验证有效（重定向）")
+                        return True, "身份验证成功（重定向）"
             
-            return False, "Authentication failed - no valid authenticated pages found"
+            return False, "身份验证失败-未找到有效的经过身份验证的页面"
             
         except Exception as e:
-            return False, f"Authentication test error: {str(e)}"
+            return False, f"身份认证测试错误: {str(e)}"
     
     def perform_checkin(self, session, account_name):
         """执行签到操作"""
-        self.logger.info(f"🎯 [{account_name}] Performing checkin...")
+        self.logger.info(f"🎯 账户 [{account_name}] 正在执行签到...")
         
         try:
             # 方法1: 直接访问签到页面
@@ -151,23 +151,23 @@ class LeafLowTokenCheckin:
                             return True, message
                             
                 except Exception as e:
-                    self.logger.debug(f"[{account_name}] API endpoint {endpoint} failed: {str(e)}")
+                    self.logger.debug(f"[{account_name}] API 端点 {endpoint} 失败: {str(e)}")
                     continue
             
-            return False, "All checkin methods failed"
+            return False, "所有签到方法都失败"
             
         except Exception as e:
-            return False, f"Checkin error: {str(e)}"
+            return False, f"签到错误: {str(e)}"
     
     def analyze_and_checkin(self, session, html_content, page_url, account_name):
         """分析页面内容并执行签到"""
         # 检查是否已经签到
         if self.already_checked_in(html_content):
-            return True, "Already checked in today"
+            return True, "今日已签到"
         
         # 检查是否需要签到
         if not self.is_checkin_page(html_content):
-            return False, "Not a checkin page"
+            return False, "不是签到页面"
         
         # 尝试POST签到
         try:
@@ -185,9 +185,9 @@ class LeafLowTokenCheckin:
                 return self.check_checkin_response(response.text)
                 
         except Exception as e:
-            self.logger.debug(f"[{account_name}] POST checkin failed: {str(e)}")
+            self.logger.debug(f"[{account_name}] POST 签到失败: {str(e)}")
         
-        return False, "Failed to perform checkin"
+        return False, "执行签到失败"
     
     def already_checked_in(self, html_content):
         """检查是否已经签到"""
@@ -243,16 +243,16 @@ class LeafLowTokenCheckin:
                 match = re.search(pattern, html_content, re.IGNORECASE)
                 if match:
                     reward = match.group(1)
-                    return True, f"Check-in successful! Earned {reward} credits"
+                    return True, f"签到成功! 获得 {reward} 元"
             
-            return True, "Check-in successful!"
+            return True, "签到成功!"
         
-        return False, "Checkin response indicates failure"
+        return False, "签到响应失败"
     
     def perform_token_checkin(self, account_data, account_name):
         """使用token执行签到"""
         if 'token_data' not in account_data:
-            return False, "No token data found in account configuration"
+            return False, "在配置文件中没有找到 token data 数据"
         
         try:
             session = self.create_session(account_data['token_data'])
@@ -260,18 +260,18 @@ class LeafLowTokenCheckin:
             # 测试认证
             auth_result = self.test_authentication(session, account_name)
             if not auth_result[0]:
-                return False, f"Authentication failed: {auth_result[1]}"
+                return False, f"身份认证失败: {auth_result[1]}"
             
             # 执行签到
             return self.perform_checkin(session, account_name)
             
         except Exception as e:
-            return False, f"Token checkin error: {str(e)}"
+            return False, f"Token 效验错误: {str(e)}"
     
     def run_all_accounts(self):
         """为所有账号执行token签到"""
         self.logger.info("=" * 60)
-        self.logger.info("🔑 LeafLow Token-Based Auto Check-in Started")
+        self.logger.info("🔑 启动 LeafLow 自动签到")
         self.logger.info("=" * 60)
         success_count = 0
         total_count = 0
@@ -279,7 +279,7 @@ class LeafLowTokenCheckin:
         
         for account_index, account in enumerate(self.config['accounts']):
             if not account.get('enabled', True):
-                self.logger.info(f"⏭️ Skipping disabled account: Account{account_index+1}")
+                self.logger.info(f"⏭️ 正在跳过已禁用的帐户：帐户 {account_index+1}")
                 continue
                 
             total_count += 1
@@ -303,18 +303,18 @@ class LeafLowTokenCheckin:
             # 账号间延迟
             if account_index < len(self.config['accounts']) - 1:
                 delay = self.config['settings'].get('retry_delay', 5)
-                self.logger.info(f"⏱️ Waiting {delay} seconds before next account...")
+                self.logger.info(f"⏱️ 等待 {delay} 秒后开始签到下一个账号...")
                 time.sleep(delay)
         
         self.logger.info("\n" + "=" * 60)
-        self.logger.info(f"🏁 Token check-in completed: {success_count}/{total_count} successful")
+        self.logger.info(f"🏁 签到已完成: {success_count}/{total_count} 成功")
         self.logger.info("=" * 60)
         
         return success_count, total_count, results
 
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description='LeafLow Token-Based Auto Check-in Script')
+    parser = argparse.ArgumentParser(description='LeafLow 自动签到脚本')
     parser.add_argument('--config', default='config.accounts.json', help='Configuration file path')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--notify', action='store_true', help='Enable notification push')
@@ -328,7 +328,7 @@ def main():
         if args.debug:
             import logging
             logging.getLogger().setLevel(logging.DEBUG)
-            checkin.logger.info("🐛 Debug mode enabled")
+            checkin.logger.info("🐛 启用调试模式")
         
         # 执行签到
         success_count, total_count, results = checkin.run_all_accounts()
@@ -340,15 +340,15 @@ def main():
                 import os
                 import json
                 
-                # Load notification config if exists
+                # 如果存在通知配置则加载
                 notify_config = {}
                 if os.path.exists('config.notify.json'):
                     with open('config.notify.json', 'r', encoding='utf-8') as f:
                         notify_config = json.load(f)
                 
                 # 构建通知内容
-                title = "LeafLow Token-Based Auto Check-in Results"
-                content_lines = [f"Token check-in completed: {success_count}/{total_count} successful\n"]
+                title = "LeafLow 自动签到结果通知"
+                content_lines = [f"🏁 签到已完成: {success_count}/{total_count} 成功\n"]
                 
                 for result in results:
                     status = "✅" if result['success'] else "❌"
@@ -356,19 +356,17 @@ def main():
                 
                 content = "\n".join(content_lines)
                 send(title, content, **notify_config)
-                checkin.logger.info("📱 Notification sent")
+                checkin.logger.info("📱 发送通知")
                 
             except ImportError:
-                checkin.logger.warning("⚠️ Notify module not found, skipping notification")
+                checkin.logger.warning("⚠️ 未找到通知模块，跳过通知")
             except Exception as e:
-                checkin.logger.error(f"❌ Failed to send notification: {str(e)}")
+                checkin.logger.error(f"❌ 发送通知失败: {str(e)}")
         
     except KeyboardInterrupt:
-        print("\n\n⏸️ User interrupted program")
+        print("\n\n⏸️ 用户中断程序")
     except Exception as e:
-        print(f"\n\n💥 Program exception: {str(e)}")
+        print(f"\n\n💥 程序异常: {str(e)}")
 
 if __name__ == "__main__":
     main()
-
-
