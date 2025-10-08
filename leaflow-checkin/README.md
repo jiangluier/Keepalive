@@ -131,9 +131,8 @@ Options:
 原仓库：https://github.com/keggin-CHN/leaflow-checkin  
 
 原项目 action 方式不支持多账号，只有本地运行可以  
-且本地运行需要先手动运行 `get_tokens_helper.py` 为每一个账号生成 config.accounts.json  
-再将多账号的 config.accounts.json 拼接成一个，才可以实现批量签到  
-也不支持账号信息的 "name" 字段，也就是说通知消息里，无法区分是哪个项目签到成功了
+且本地运行需要先手动运行 `get_tokens_helper.py` 为每一个账号生成 `config.accounts.json` 
+再将多账号的 `config.accounts.json` 拼接成一个，才可以实现批量签到  
+也不支持账号信息的 `name` 字段，也就是说通知消息里，无法区分是哪个账号签到成功了
 
 本项目将所有手动过程（除了获取登录cookie需要手动外）全部自动化了！
-
