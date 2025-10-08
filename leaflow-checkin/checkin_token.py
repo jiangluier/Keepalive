@@ -100,12 +100,12 @@ class LeafLowTokenCheckin:
                 if response.status_code == 200:
                     content = response.text.lower()
                     if any(indicator in content for indicator in ['dashboard', 'profile', 'user', 'logout', 'welcome']):
-                        self.logger.info(f"✅ [{account_name}] 身份验证有效")
+                        self.logger.info(f"✅ 账户 [{account_name}] 身份验证有效")
                         return True, "身份验证成功"
                 elif response.status_code in [301, 302, 303]:
                     location = response.headers.get('location', '')
                     if 'login' not in location.lower():
-                        self.logger.info(f"✅ [{account_name}] 身份验证有效（重定向）")
+                        self.logger.info(f"✅ 账户 [{account_name}] 身份验证有效（重定向）")
                         return True, "身份验证成功（重定向）"
             
             return False, "身份验证失败-未找到有效的经过身份验证的页面"
@@ -151,7 +151,7 @@ class LeafLowTokenCheckin:
                             return True, message
                             
                 except Exception as e:
-                    self.logger.debug(f"[{account_name}] API 端点 {endpoint} 失败: {str(e)}")
+                    self.logger.debug(f"账户 [{account_name}] API 端点 {endpoint} 失败: {str(e)}")
                     continue
             
             return False, "所有签到方法都失败"
@@ -295,10 +295,10 @@ class LeafLowTokenCheckin:
             })
             
             if success:
-                self.logger.info(f"✅ [{account_name}] {message}")
+                self.logger.info(f"✅ 账户 [{account_name}] {message}")
                 success_count += 1
             else:
-                self.logger.error(f"❌ [{account_name}] {message}")
+                self.logger.error(f"❌ 账户 [{account_name}] {message}")
             
             # 账号间延迟
             if account_index < len(self.config['accounts']) - 1:
@@ -370,3 +370,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
