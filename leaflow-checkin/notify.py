@@ -10,13 +10,10 @@ _print = print
 mutex = threading.Lock()
 
 def print(text, *args, **kw):
-    """
-    Thread-safe print function to prevent output corruption.
-    """
     with mutex:
         _print(text, *args, **kw)
 
-# Notification service configuration
+# 通知服务配置
 push_config = {
     'HITOKOTO': True,
     'CONSOLE': True,
@@ -25,22 +22,19 @@ push_config = {
     'TG_CHAT_ID': ''  # Telegram chat ID
 }
 
-# Load configuration from environment variables
+# 从环境变量加载配置
 for k in push_config:
     if os.getenv(k):
         push_config[k] = os.getenv(k)
 
 def telegram_bot(title: str, content: str) -> None:
-    """
-    Send notification via Telegram bot.
-    """
-    print("Telegram bot service starting")
+    print("正在启动 TG 机器人...")
     
     token = push_config.get("TG_BOT_TOKEN")
     chat_id = push_config.get("TG_CHAT_ID")
     
     if not token or not chat_id:
-        print("Telegram configuration missing, please check TG_BOT_TOKEN and TG_CHAT_ID!")
+        print("缺少TG配置参数，请检查TG_BOT_TOKEN和TG_CHAT_ID!")
         return
     
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -55,21 +49,18 @@ def telegram_bot(title: str, content: str) -> None:
         result = response.json()
         
         if result.get("ok"):
-            print("Telegram bot push successful!")
+            print("TG 机器人消息推送成功！")
         else:
-            print(f"Telegram bot push failed! Error: {result.get('description')}")
+            print(f"TG机器人推送失败! 错误: {result.get('description')}")
     except Exception as e:
-        print(f"Telegram bot push exception: {e}")
+        print(f"TG机器人推送异常: {e}")
 
 def wecom_bot(title: str, content: str) -> None:
-    """
-    Send notification via WeChat Work bot.
-    """
-    print("WeChat Work bot service starting")
+    print("企业微信机器人服务启动...")
     
     key = push_config.get("QYWX_KEY")
     if not key:
-        print("WeChat Work configuration missing, please check QYWX_KEY!")
+        print("缺少企业微信推送配置，请查看环境变量 QYWX_KEY")
         return
     
     url = f"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={key}"
@@ -82,32 +73,25 @@ def wecom_bot(title: str, content: str) -> None:
         ).json()
 
         if response.get("errcode") == 0:
-            print("WeChat Work bot push successful!")
+            print("企业微信机器人消息推送成功!")
         else:
-            print(f"WeChat Work bot push failed! Error code: {response.get('errcode')}, Error message: {response.get('errmsg')}")
+            print(f"企业微信机器人推送失败！错误代码：{Response.get（'errcode'）}，错误消息：{response.get（'errmsg'）}")
     except Exception as e:
-        print(f"WeChat Work bot push exception: {e}")
+        print(f"企业微信机器人推送异常: {e}")
 
 def one() -> str:
-    """
-    Get a random sentence from Hitokoto API.
-    """
     url = "https://v1.hitokoto.cn/"
     try:
         res = requests.get(url, timeout=10).json()
         return res["hitokoto"] + "    ----" + res["from"]
     except Exception as e:
-        print(f"Hitokoto fetch failed: {e}")
-        return "Hitokoto fetch failed"
+        print(f"Hitokoto 获取失败: {e}")
+        return "Hitokoto 获取失败"
 
 def console(title: str, content: str) -> None:
-    """
-    Print notification to console.
-    """
     print(f"{title}\n\n{content}")
 
 def add_notify_function():
-    """Add all notification functions"""
     notify_function = []
     
     if push_config.get("CONSOLE"):
@@ -130,14 +114,14 @@ def send(title: str, content: str, ignore_default_config: bool = False, **kwargs
             push_config.update(kwargs)
 
     if not content:
-        print(f"{title} Push content is empty!")
+        print(f"{title} 推送内容为空！")
         return
 
-    # Skip push based on title, environment variable: SKIP_PUSH_TITLE separated by newline
+    # 根据标题跳过推送，环境变量：SKIP_PUSH_TITLE，以换行符分隔
     skipTitle = os.getenv("SKIP_PUSH_TITLE")
     if skipTitle:
         if title in re.split("\n", skipTitle):
-            print(f"{title} is in SKIP_PUSH_TITLE environment variable, skipping push!")
+            print(f"{title} 位于 SKIP_PUSH_TITLE 环境变量中，跳过推送！")
             return
 
     # Add Hitokoto
@@ -156,10 +140,9 @@ def send(title: str, content: str, ignore_default_config: bool = False, **kwargs
     [t.join() for t in ts]
 
 def main():
-    print("Starting test notification...")
-    send("Test Title", "This is a notification test. If you receive this, the notification configuration is successful!")
-    print("Notification request completed")
+    print("正在进行通知测试...")
+    send("测试标题”，“这是通知测试。如果收到此消息，则通知配置成功！")
+    print("通知请求完成！")
 
 if __name__ == "__main__":
-
     main()
