@@ -22,7 +22,7 @@ push_config = {
     'CONSOLE': True,
     'QYWX_KEY': '',  # WeChat Work webhook key
     'TG_BOT_TOKEN': '',  # Telegram bot API token
-    'TG_USER_ID': ''  # Telegram user ID
+    'TG_CHAT_ID': ''  # Telegram chat ID
 }
 
 # Load configuration from environment variables
@@ -37,10 +37,10 @@ def telegram_bot(title: str, content: str) -> None:
     print("Telegram bot service starting")
     
     token = push_config.get("TG_BOT_TOKEN")
-    chat_id = push_config.get("TG_USER_ID")
+    chat_id = push_config.get("TG_CHAT_ID")
     
     if not token or not chat_id:
-        print("Telegram configuration missing, please check TG_BOT_TOKEN and TG_USER_ID!")
+        print("Telegram configuration missing, please check TG_BOT_TOKEN and TG_CHAT_ID!")
         return
     
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -116,7 +116,7 @@ def add_notify_function():
     if push_config.get("QYWX_KEY"):
         notify_function.append(wecom_bot)
     
-    if push_config.get("TG_BOT_TOKEN") and push_config.get("TG_USER_ID"):
+    if push_config.get("TG_BOT_TOKEN") and push_config.get("TG_CHAT_ID"):
         notify_function.append(telegram_bot)
 
     return notify_function
@@ -161,4 +161,5 @@ def main():
     print("Notification request completed")
 
 if __name__ == "__main__":
+
     main()
