@@ -4,13 +4,6 @@
 LeafLow Token-Based Check-in Script
 基于预设token/cookie的签到脚本
 适用于服务器环境，无需浏览器
-
-使用方法：
-1. 手动在浏览器中登录 https://leaflow.net
-2. 打开浏览器开发者工具 (F12)
-3. 在Network/网络标签页中查找请求的Cookie或Authorization头
-4. 将token/cookie添加到配置文件中
-5. 运行此脚本进行自动签到
 """
 
 import json
@@ -283,7 +276,8 @@ class LeafLowTokenCheckin:
                 continue
                 
             total_count += 1
-            account_name = f"账号{account_index + 1}"
+            # 优先使用配置中的 'name' 字段，如果不存在则使用默认的 "账号N"
+            account_name = account.get('name', f"账号{account_index + 1}") 
             self.logger.info(f"\n📋 正在处理 {account_name}...")
             
             success, message = self.perform_token_checkin(account, account_name)
@@ -369,3 +363,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
