@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-LeafLow Token-Based Check-in Script
-基于预设token/cookie的签到脚本
-适用于服务器环境，无需浏览器
+基于预设token/cookie的签到脚本，适用于服务器环境，无需浏览器
+
+使用方式：
+python3 checkin_token.py [options]
+
+Options:
+  --config FILE    指定配置文件路径
+  --debug          启用调试模式
+  --notify         启用通知推送
+  --no-notify      禁用通知推送
 """
 
 import json
@@ -363,4 +370,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
