@@ -1,0 +1,5 @@
+{
+  "QYWX_KEY": "your_wechat_webhook_key",
+  "TG_BOT_TOKEN": "your_telegram_bot_token",
+  "TG_USER_ID": "your_telegram_user_id"
+}

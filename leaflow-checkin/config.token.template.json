@@ -1,0 +1,19 @@
+{
+  "settings": {
+    "log_level": "INFO",
+    "retry_delay": 3,
+    "timeout": 30,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+  },
+  "accounts": [
+    {
+      "token_data": {
+        "cookies": {
+          "leaflow_session": "your_session_token_here",
+          "remember_web_59ba36addc2b2f9401580f014c7f58ea4e30989d": "your_remember_token_here",
+          "XSRF-TOKEN": "your_csrf_token_here"
+        }
+      }
+    }
+  ]
+}
