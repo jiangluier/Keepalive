@@ -19,6 +19,14 @@ import requests
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# 配置常量
+LOGIN_URL = "https://leaflow.net/login"
+CHECKIN_URL = "https://checkin.leaflow.net"
+WAIT_TIME_AFTER_LOGIN = 20  # 登录后等待的秒数
+WAIT_TIME_AFTER_CHECKIN_CLICK = 5  # 点击签到后等待的秒数
+RETRY_WAIT_TIME_PAGE_LOAD = 20 # 签到页面加载每次重试等待时间
+RETRY_COUNT_PAGE_LOAD = 3 # 签到页面加载重试次数
+
 class LeaflowAutoCheckin:
     def __init__(self, email, password):
         self.email = email
@@ -92,7 +100,7 @@ class LeaflowAutoCheckin:
         logger.info(f"开始登录流程")
         
         # 访问登录页面
-        self.driver.get("https://leaflow.net/login")
+        self.driver.get(self.LOGIN_URL)
         time.sleep(5)  # 增加初始等待时间
         
         # 关闭弹窗
@@ -195,7 +203,7 @@ class LeaflowAutoCheckin:
         
         # 等待登录完成
         try:
-            WebDriverWait(self.driver, 20).until(
+            WebDriverWait(self.driver, self.WAIT_TIME_AFTER_LOGIN).until(
                 lambda driver: "dashboard" in driver.current_url or "workspaces" in driver.current_url or "login" not in driver.current_url
             )
             
@@ -222,8 +230,13 @@ class LeaflowAutoCheckin:
             except Exception as e:
                 raise e
     
-    def wait_for_checkin_page_loaded(self, max_retries=3, wait_time=20):
+    def wait_for_checkin_page_loaded(self, max_retries=None, wait_time=None):
         """等待签到页面完全加载，支持重试"""
+        
+        # 使用类常量作为默认值
+        max_retries = max_retries if max_retries is not None else self.RETRY_COUNT_PAGE_LOAD
+        wait_time = wait_time if wait_time is not None else self.RETRY_WAIT_TIME_PAGE_LOAD
+        
         for attempt in range(max_retries):
             logger.info(f"等待签到页面加载，尝试 {attempt + 1}/{max_retries}，等待 {wait_time} 秒...")
             time.sleep(wait_time)
@@ -266,62 +279,49 @@ class LeaflowAutoCheckin:
         logger.info("查找立即签到按钮...")
         
         try:
-            # 先等待页面可能的重载
             time.sleep(5)
-            
-            # 使用和单账号成功时相同的选择器
-            checkin_selectors = [
-                "button.checkin-btn",  # 根据您提供的HTML，这是最准确的选择器
-                "//button[contains(text(), '立即签到')]",
-                "//button[contains(@class, 'checkin')]",
-                "button[type='submit']",
-                "button[name='checkin']"
-            ]
-            
-            for selector in checkin_selectors:
-                try:
-                    if selector.startswith("//"):
-                        checkin_btn = WebDriverWait(self.driver, 15).until(
-                            EC.element_to_be_clickable((By.XPATH, selector))
-                        )
-                    else:
-                        checkin_btn = WebDriverWait(self.driver, 15).until(
-                            EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
-                        )
-                    
-                    if checkin_btn.is_displayed() and checkin_btn.is_enabled():
-                        logger.info(f"找到并点击立即签到按钮")
-                        checkin_btn.click()
-                        return True
-                        
-                except Exception as e:
-                    logger.debug(f"选择器未找到按钮: {e}")
-                    continue
-            
+            checkin_btn = self.wait_for_element_present(By.CSS_SELECTOR, "button.checkin-btn", 10)
+
+            # 判断是否已经签到
+            if not checkin_btn.is_enabled() and ("已签到" in checkin_btn.text or "disabled" in checkin_btn.get_attribute("class")):
+                logger.info("签到按钮显示为 '已签到' 且不可点击。")
+                return "ALREADY_CHECKED_IN" # 返回已签到标记
+
+            # 尝试点击签到按钮
+            if checkin_btn.is_displayed() and checkin_btn.is_enabled():
+                logger.info("找到并点击 '立即签到' 按钮")
+                checkin_btn.click()
+                return "CLICK_SUCCESS" # 返回成功点击标记
+
             logger.error("找不到可点击的签到按钮")
-            return False
-                    
+            return "NO_BUTTON_FOUND" # 返回不可点击标记
+
+        except TimeoutException:
+            logger.error("在规定时间内找不到签到按钮")
+            return "NO_BUTTON_FOUND" # 返回未找到签到按钮标记
         except Exception as e:
             logger.error(f"点击签到按钮时出错: {e}")
-            return False
-    
+            return "ERROR"  # 返回错误标记
+              
     def checkin(self):
         """执行签到流程"""
         logger.info("跳转到签到页面...")
-        
-        # 跳转到签到页面
-        self.driver.get("https://checkin.leaflow.net")
+        self.driver.get(self.CHECKIN_URL)
         
         # 等待签到页面加载（最多重试3次，每次等待20秒）
-        if not self.wait_for_checkin_page_loaded(max_retries=3, wait_time=20):
-            raise Exception("签到页面加载失败，无法找到签到相关元素")
+        if not self.wait_for_checkin_page_loaded():
+            raise Exception("签到页面加载失败，无法找到相关元素")
         
         # 查找并点击立即签到按钮
-        if not self.find_and_click_checkin_button():
+        click_result = self.find_and_click_checkin_button()
+        
+        if click_result == "ALREADY_CHECKED_IN":
+            return "今日已签到，请明日再来"
+        if click_result != "CLICK_SUCCESS":
             raise Exception("找不到立即签到按钮或按钮不可点击")
         
         logger.info("已点击立即签到按钮")
-        time.sleep(5)  # 等待签到结果
+        time.sleep(self.WAIT_TIME_AFTER_CHECKIN_CLICK)
         
         # 获取签到结果
         result_message = self.get_checkin_result()
@@ -368,14 +368,6 @@ class LeaflowAutoCheckin:
                     for line in lines:
                         if keyword in line and len(line.strip()) < 100:  # 避免提取过长的文本
                             return line.strip()
-            
-            # 检查签到按钮状态变化
-            try:
-                checkin_btn = self.driver.find_element(By.CSS_SELECTOR, "button.checkin-btn")
-                if not checkin_btn.is_enabled() or "已签到" in checkin_btn.text or "disabled" in checkin_btn.get_attribute("class"):
-                    return "今日已签到完成"
-            except:
-                pass
             
             return "签到完成，但未找到具体结果消息"
             
@@ -480,15 +472,31 @@ class MultiAccountManager:
             return
         
         try:
-            # 构建通知消息
-            success_count = sum(1 for _, success, _ in results if success)
+            SUCCESS_MSG = "今日已签到，请明日再来"
+            # 脚本本次签到的账号
+            script_success_count = sum(1 for _, success, result in results if success and result != SUCCESS_MSG)
+            # 本次操作前已签到的账号
+            already_checked_count = sum(1 for _, _, result in results if result == SUCCESS_MSG)
+            # 失败的账号
+            failure_count = sum(1 for _, success, _ in results if not success)
+            # 处理的账号总数
             total_count = len(results)
-            
-            message = f"🎁 Leaflow自动签到通知\n"
-            message += f"📊 成功: {success_count}/{total_count}\n\n"
-            
+
+            message = f"🎁 Leaflow自动签到通知\n\n"
+            message += f"📋 共处理账号: {total_count} 个\n"
+            message += f"📊 手动已签到: {already_checked_count} 个\n"
+            message += f"📊 脚本已签到: {script_success_count} 个\n"
+            message += f"📊 总计已签到: {already_checked_count} + {script_success_count} 个\n"
+            message += f"❌ 失败: {failure_count} 个\n"
+         
             for email, success, result in results:
-                status = "✅" if success else "❌"
+                if success and result != SUCCESS_MSG:
+                    status = "✅" # 脚本已签到
+                elif result == SUCCESS_MSG:
+                    status = "⏳" # 手动已签到
+                else:
+                    status = "❌" # 失败
+                
                 # 隐藏邮箱部分字符以保护隐私
                 masked_email = email[:3] + "***" + email[email.find("@"):]
                 message += f"{status} {masked_email}: {result}\n"
@@ -502,12 +510,12 @@ class MultiAccountManager:
             
             response = requests.post(url, data=data, timeout=10)
             if response.status_code == 200:
-                logger.info("Telegram汇总通知发送成功")
+                logger.info("Telegram 通知发送成功")
             else:
-                logger.error(f"Telegram通知发送失败: {response.text}")
+                logger.error(f"Telegram 通知发送失败: {response.text}")
                 
         except Exception as e:
-            logger.error(f"发送Telegram通知时出错: {e}")
+            logger.error(f"Telegram 通知发送出错: {e}")
     
     def run_all(self):
         """运行所有账号的签到流程"""
@@ -561,4 +569,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
