@@ -63,7 +63,7 @@ class LeaflowAutoCheckin:
     def close_popup(self):
         """关闭初始弹窗 - 通过点击外部区域"""
         try:
-            logger.info("尝试关闭初始弹窗...")
+            logger.info("👉 尝试关闭初始弹窗...")
             time.sleep(3)  # 等待弹窗加载
             
             # 尝试点击页面左上角空白处关闭弹窗
@@ -71,7 +71,7 @@ class LeaflowAutoCheckin:
                 actions = ActionChains(self.driver)
                 # 点击页面左上角(10,10)位置
                 actions.move_by_offset(10, 10).click().perform()
-                logger.info("关闭弹窗成功")
+                logger.info("✅ 关闭弹窗成功")
                 time.sleep(2)
                 return True
             except:
@@ -80,7 +80,7 @@ class LeaflowAutoCheckin:
             return False
             
         except Exception as e:
-            logger.warning(f"关闭弹窗时出错: {e}")
+            logger.warning(f"❌ 关闭弹窗时出错: {e}")
             return False
     
     def wait_for_element_clickable(self, by, value, timeout=10):
@@ -97,7 +97,7 @@ class LeaflowAutoCheckin:
     
     def login(self):
         """执行登录流程"""
-        logger.info(f"开始登录流程")
+        logger.info(f"🔑 开始登录流程")
         
         # 访问登录页面
         self.driver.get(self.LOGIN_URL)
@@ -108,9 +108,7 @@ class LeaflowAutoCheckin:
         
         # 输入邮箱
         try:
-            logger.info("查找邮箱输入框...")
-            
-            # 等待页面稳定
+            logger.info("🔍 查找邮箱输入框...")
             time.sleep(2)
             
             # 尝试多种选择器找到邮箱输入框
@@ -128,50 +126,49 @@ class LeaflowAutoCheckin:
             for selector in email_selectors:
                 try:
                     email_input = self.wait_for_element_clickable(By.CSS_SELECTOR, selector, 5)
-                    logger.info(f"找到邮箱输入框")
+                    logger.info(f"✅ 找到邮箱输入框")
                     break
                 except:
                     continue
             
             if not email_input:
-                raise Exception("找不到邮箱输入框")
+                raise Exception("❌ 找不到邮箱输入框")
             
             # 清除并输入邮箱
             email_input.clear()
             email_input.send_keys(self.email)
-            logger.info("邮箱输入完成")
+            logger.info("✅ 邮箱输入完成")
             time.sleep(2)
             
         except Exception as e:
-            logger.error(f"输入邮箱时出错: {e}")
+            logger.error(f"❌ 输入邮箱时出错: {e}")
             # 尝试使用JavaScript直接设置值
             try:
                 self.driver.execute_script(f"document.querySelector('input[type=\"text\"], input[type=\"email\"]').value = '{self.email}';")
-                logger.info("通过JavaScript设置邮箱")
+                logger.info("👉 通过JavaScript设置邮箱")
                 time.sleep(2)
             except:
-                raise Exception(f"无法输入邮箱: {e}")
+                raise Exception(f"❌ 无法输入邮箱: {e}")
         
         # 等待密码输入框出现并输入密码
         try:
-            logger.info("查找密码输入框...")
-            
-            # 等待密码框出现
+            logger.info("🔍 查找密码输入框...")
+
             password_input = self.wait_for_element_clickable(
                 By.CSS_SELECTOR, "input[type='password']", 10
             )
             
             password_input.clear()
             password_input.send_keys(self.password)
-            logger.info("密码输入完成")
+            logger.info("✅ 密码输入完成")
             time.sleep(1)
             
         except TimeoutException:
-            raise Exception("找不到密码输入框")
+            raise Exception("❌ 找不到密码输入框")
         
         # 点击登录按钮
         try:
-            logger.info("查找登录按钮...")
+            logger.info("🔍 查找登录按钮...")
             login_btn_selectors = [
                 "//button[contains(text(), '登录')]",
                 "//button[contains(text(), 'Login')]",
@@ -187,19 +184,19 @@ class LeaflowAutoCheckin:
                         login_btn = self.wait_for_element_clickable(By.XPATH, selector, 5)
                     else:
                         login_btn = self.wait_for_element_clickable(By.CSS_SELECTOR, selector, 5)
-                    logger.info(f"找到登录按钮")
+                    logger.info(f"✅ 找到登录按钮")
                     break
                 except:
                     continue
             
             if not login_btn:
-                raise Exception("找不到登录按钮")
+                raise Exception("❌ 找不到登录按钮")
             
             login_btn.click()
-            logger.info("已点击登录按钮")
+            logger.info("✅ 已点击登录按钮")
             
         except Exception as e:
-            raise Exception(f"点击登录按钮失败: {e}")
+            raise Exception(f"❌ 点击登录按钮失败: {e}")
         
         # 等待登录完成
         try:
@@ -210,10 +207,10 @@ class LeaflowAutoCheckin:
             # 检查当前URL确认登录成功
             current_url = self.driver.current_url
             if "dashboard" in current_url or "workspaces" in current_url or "login" not in current_url:
-                logger.info(f"登录成功，当前URL: {current_url}")
+                logger.info(f"✅ 登录成功，当前URL: {current_url}")
                 return True
             else:
-                raise Exception("登录后未跳转到正确页面")
+                raise Exception("⚠️ 登录后未跳转到正确页面")
                 
         except TimeoutException:
             # 检查是否登录失败
@@ -223,10 +220,10 @@ class LeaflowAutoCheckin:
                     try:
                         error_msg = self.driver.find_element(By.CSS_SELECTOR, selector)
                         if error_msg.is_displayed():
-                            raise Exception(f"登录失败: {error_msg.text}")
+                            raise Exception(f"❌ 登录失败: {error_msg.text}")
                     except:
                         continue
-                raise Exception("登录超时，无法确认登录状态")
+                raise Exception("⚠️ 登录超时，无法确认登录状态")
             except Exception as e:
                 raise e
     
@@ -238,7 +235,7 @@ class LeaflowAutoCheckin:
         wait_time = wait_time if wait_time is not None else self.RETRY_WAIT_TIME_PAGE_LOAD
         
         for attempt in range(max_retries):
-            logger.info(f"等待签到页面加载，尝试 {attempt + 1}/{max_retries}，等待 {wait_time} 秒...")
+            logger.info(f"⏳ 等待签到页面加载，尝试 {attempt + 1}/{max_retries}，等待 {wait_time} 秒...")
             time.sleep(wait_time)
             
             try:
@@ -262,21 +259,21 @@ class LeaflowAutoCheckin:
                             )
                         
                         if element.is_displayed():
-                            logger.info(f"找到签到页面元素")
+                            logger.info(f"✅ 找到签到页面元素")
                             return True
                     except:
                         continue
                 
-                logger.warning(f"第 {attempt + 1} 次尝试未找到签到按钮，继续等待...")
+                logger.warning(f"⏳ 第 {attempt + 1} 次尝试未找到签到按钮，继续等待...")
                 
             except Exception as e:
-                logger.warning(f"第 {attempt + 1} 次检查签到页面时出错: {e}")
+                logger.warning(f"❌ 第 {attempt + 1} 次检查签到页面时出错: {e}")
         
         return False
     
     def find_and_click_checkin_button(self):
         """查找并点击签到按钮 - 使用和单账号成功时相同的逻辑"""
-        logger.info("查找立即签到按钮...")
+        logger.info("🔍 查找立即签到按钮...")
         
         try:
             time.sleep(5)
@@ -284,43 +281,43 @@ class LeaflowAutoCheckin:
 
             # 判断是否已经签到
             if not checkin_btn.is_enabled() and ("已签到" in checkin_btn.text or "disabled" in checkin_btn.get_attribute("class")):
-                logger.info("签到按钮显示为 '已签到' 且不可点击。")
+                logger.info("👉 签到按钮显示为 '已签到' 且不可点击。")
                 return "ALREADY_CHECKED_IN" # 返回已签到标记
 
             # 尝试点击签到按钮
             if checkin_btn.is_displayed() and checkin_btn.is_enabled():
-                logger.info("找到并点击 '立即签到' 按钮")
+                logger.info("👉 找到并点击 '立即签到' 按钮")
                 checkin_btn.click()
                 return "CLICK_SUCCESS" # 返回成功点击标记
 
-            logger.error("找不到可点击的签到按钮")
+            logger.error("⚠️ 找不到可点击的签到按钮")
             return "NO_BUTTON_FOUND" # 返回不可点击标记
 
         except TimeoutException:
-            logger.error("在规定时间内找不到签到按钮")
+            logger.error("⚠️ 在规定时间内找不到签到按钮")
             return "NO_BUTTON_FOUND" # 返回未找到签到按钮标记
         except Exception as e:
-            logger.error(f"点击签到按钮时出错: {e}")
+            logger.error(f"❌ 点击签到按钮时出错: {e}")
             return "ERROR"  # 返回错误标记
               
     def checkin(self):
         """执行签到流程"""
-        logger.info("跳转到签到页面...")
+        logger.info("👉 跳转到签到页面...")
         self.driver.get(self.CHECKIN_URL)
         
         # 等待签到页面加载（最多重试3次，每次等待20秒）
         if not self.wait_for_checkin_page_loaded():
-            raise Exception("签到页面加载失败，无法找到相关元素")
+            raise Exception("❌ 签到页面加载失败，无法找到相关元素")
         
         # 查找并点击立即签到按钮
         click_result = self.find_and_click_checkin_button()
         
         if click_result == "ALREADY_CHECKED_IN":
-            return "今日已签到，请明日再来"
+            return "⏳ 今日已签到，请明日再来"
         if click_result != "CLICK_SUCCESS":
-            raise Exception("找不到立即签到按钮或按钮不可点击")
+            raise Exception("⚠️ 找不到立即签到按钮或按钮不可点击")
         
-        logger.info("已点击立即签到按钮")
+        logger.info("👉 已点击立即签到按钮")
         time.sleep(self.WAIT_TIME_AFTER_CHECKIN_CLICK)
         
         # 获取签到结果
@@ -330,7 +327,6 @@ class LeaflowAutoCheckin:
     def get_checkin_result(self):
         """获取签到结果消息"""
         try:
-            # 给页面一些时间显示结果
             time.sleep(3)
             
             # 尝试查找各种可能的成功消息元素
@@ -369,27 +365,27 @@ class LeaflowAutoCheckin:
                         if keyword in line and len(line.strip()) < 100:  # 避免提取过长的文本
                             return line.strip()
             
-            return "签到完成，但未找到具体结果消息"
+            return "⚠️ 签到完成，但未找到具体结果消息"
             
         except Exception as e:
-            return f"获取签到结果时出错: {str(e)}"
+            return f"❌ 获取签到结果时出错: {str(e)}"
     
     def run(self):
         """单个账号执行流程"""
         try:
-            logger.info(f"开始处理账号")
+            logger.info(f"⏳ 开始处理账号")
             
             # 登录
             if self.login():
                 # 签到
                 result = self.checkin()
-                logger.info(f"签到结果: {result}")
+                logger.info(f"📋 签到结果: {result}")
                 return True, result
             else:
-                raise Exception("登录失败")
+                raise Exception("❌ 登录失败")
                 
         except Exception as e:
-            error_msg = f"自动签到失败: {str(e)}"
+            error_msg = f"❌ 自动签到失败: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
         
@@ -406,19 +402,17 @@ class MultiAccountManager:
         self.accounts = self.load_accounts()
     
     def load_accounts(self):
-        """从环境变量加载多账号信息，支持冒号分隔多账号和单账号"""
         accounts = []
-        
-        logger.info("开始加载账号配置...")
+        logger.info("⏳ 开始加载账号配置...")
         
         # 方法1: 冒号分隔多账号格式
         accounts_str = os.getenv('LEAFLOW_ACCOUNTS', '').strip()
         if accounts_str:
             try:
-                logger.info("尝试解析冒号分隔多账号配置")
+                logger.info("⏳ 尝试解析冒号分隔多账号配置")
                 account_pairs = [pair.strip() for pair in accounts_str.split(',')]
                 
-                logger.info(f"找到 {len(account_pairs)} 个账号")
+                logger.info(f"👉 找到 {len(account_pairs)} 个账号")
                 
                 for i, pair in enumerate(account_pairs):
                     if ':' in pair:
@@ -431,19 +425,19 @@ class MultiAccountManager:
                                 'email': email,
                                 'password': password
                             })
-                            logger.info(f"成功添加第 {i+1} 个账号")
+                            logger.info(f"✅ 成功添加第 {i+1} 个账号")
                         else:
-                            logger.warning(f"账号对格式错误")
+                            logger.warning(f"❌ 账号对格式错误")
                     else:
-                        logger.warning(f"账号对缺少冒号分隔符")
+                        logger.warning(f"❌ 账号对缺少冒号分隔符")
                 
                 if accounts:
-                    logger.info(f"从冒号分隔格式成功加载了 {len(accounts)} 个账号")
+                    logger.info(f"👉 从冒号分隔格式成功加载了 {len(accounts)} 个账号")
                     return accounts
                 else:
-                    logger.warning("冒号分隔配置中没有找到有效的账号信息")
+                    logger.warning("⚠️ 冒号分隔配置中没有找到有效的账号信息")
             except Exception as e:
-                logger.error(f"解析冒号分隔账号配置失败: {e}")
+                logger.error(f"❌ 解析冒号分隔账号配置失败: {e}")
         
         # 方法2: 单账号格式
         single_email = os.getenv('LEAFLOW_EMAIL', '').strip()
@@ -454,25 +448,25 @@ class MultiAccountManager:
                 'email': single_email,
                 'password': single_password
             })
-            logger.info("加载了单个账号配置")
+            logger.info("👉 加载了单个账号配置")
             return accounts
         
         # 如果所有方法都失败
-        logger.error("未找到有效的账号配置")
-        logger.error("请检查以下环境变量设置:")
-        logger.error("1. LEAFLOW_ACCOUNTS: 冒号分隔多账号 (email1:pass1,email2:pass2)")
-        logger.error("2. LEAFLOW_EMAIL 和 LEAFLOW_PASSWORD: 单账号")
+        logger.error("⚠️ 未找到有效的账号配置")
+        logger.error("⚠️ 请检查以下环境变量设置:")
+        logger.error("⚠️ 1. LEAFLOW_ACCOUNTS: 冒号分隔多账号 (email1:pass1,email2:pass2)")
+        logger.error("⚠️ 2. LEAFLOW_EMAIL 和 LEAFLOW_PASSWORD: 单账号")
         
-        raise ValueError("未找到有效的账号配置")
+        raise ValueError("⚠️ 未找到有效的账号配置")
     
     def send_notification(self, results):
         """发送汇总通知到Telegram"""
         if not self.telegram_bot_token or not self.telegram_chat_id:
-            logger.info("Telegram配置未设置，跳过通知")
+            logger.info("⚠️ Telegram配置未设置，跳过通知")
             return
         
         try:
-            SUCCESS_MSG = "今日已签到，请明日再来"
+            SUCCESS_MSG = "⏳ 今日已签到，请明日再来"
             # 脚本本次签到的账号
             script_success_count = sum(1 for _, success, result in results if success and result != SUCCESS_MSG)
             # 本次操作前已签到的账号
@@ -483,11 +477,11 @@ class MultiAccountManager:
             total_count = len(results)
 
             message = f"🎁 Leaflow自动签到通知\n\n"
-            message += f"📋 共处理账号: {total_count} 个\n"
             message += f"📊 手动已签到: {already_checked_count} 个\n"
             message += f"📊 脚本已签到: {script_success_count} 个\n"
+            message += f"📋 共处理账号: {total_count} 个\n"
             message += f"📊 总计已签到: {already_checked_count} + {script_success_count} 个\n"
-            message += f"❌ 失败: {failure_count} 个\n"
+            message += f"❌ 签到失败: {failure_count} 个\n"
          
             for email, success, result in results:
                 if success and result != SUCCESS_MSG:
@@ -510,21 +504,21 @@ class MultiAccountManager:
             
             response = requests.post(url, data=data, timeout=10)
             if response.status_code == 200:
-                logger.info("Telegram 通知发送成功")
+                logger.info("✅ Telegram 通知发送成功")
             else:
-                logger.error(f"Telegram 通知发送失败: {response.text}")
+                logger.error(f"❌ Telegram 通知发送失败: {response.text}")
                 
         except Exception as e:
-            logger.error(f"Telegram 通知发送出错: {e}")
+            logger.error(f"❌ Telegram 通知发送出错: {e}")
     
     def run_all(self):
         """运行所有账号的签到流程"""
-        logger.info(f"开始执行 {len(self.accounts)} 个账号的签到任务")
+        logger.info(f"👉 开始执行 {len(self.accounts)} 个账号的签到任务")
         
         results = []
         
         for i, account in enumerate(self.accounts, 1):
-            logger.info(f"处理第 {i}/{len(self.accounts)} 个账号")
+            logger.info(f"👉 处理第 {i}/{len(self.accounts)} 个账号")
             
             try:
                 auto_checkin = LeaflowAutoCheckin(account['email'], account['password'])
@@ -534,11 +528,11 @@ class MultiAccountManager:
                 # 在账号之间添加间隔，避免请求过于频繁
                 if i < len(self.accounts):
                     wait_time = 5
-                    logger.info(f"等待{wait_time}秒后处理下一个账号...")
+                    logger.info(f"⏳ 等待{wait_time}秒后处理下一个账号...")
                     time.sleep(wait_time)
                     
             except Exception as e:
-                error_msg = f"处理账号时发生异常: {str(e)}"
+                error_msg = f"❌ 处理账号时发生异常: {str(e)}"
                 logger.error(error_msg)
                 results.append((account['email'], False, error_msg))
         
@@ -569,5 +563,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
