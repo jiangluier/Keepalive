@@ -475,13 +475,15 @@ class MultiAccountManager:
             failure_count = sum(1 for _, success, _ in results if not success)
             # 处理的账号总数
             total_count = len(results)
+            # 已成功签到的账号总数
+            total_success_count = already_checked_count + script_success_count
 
             message = f"🎁 Leaflow自动签到通知\n\n"
+            message += f"📋 共处理账号: {total_count} 个，其中：\n"
             message += f"📊 手动已签到: {already_checked_count} 个\n"
             message += f"📊 脚本已签到: {script_success_count} 个\n"
-            message += f"📋 共处理账号: {total_count} 个\n"
-            message += f"📊 总计已签到: {already_checked_count} + {script_success_count} 个\n"
-            message += f"❌ 签到失败: {failure_count} 个\n"
+            message += f"📊 总计已签到: {total_success_count} 个\n"
+            message += f"❌ 签到失败: {failure_count} 个\n\n"
          
             for email, success, result in results:
                 if success and result != SUCCESS_MSG:
@@ -563,3 +565,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
