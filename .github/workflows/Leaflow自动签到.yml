@@ -1,4 +1,4 @@
-name: Leaflow Auto Checkin
+name: Leaflow自动签到
 
 on:
   schedule:
