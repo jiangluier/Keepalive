@@ -937,7 +937,7 @@ export default {
             })
             .catch(e => {
               console.error(`Webhook 重启失败 (${appConfig.name}):`, e.message);
-              // 额外的：如果启动失败，再发送一次 Telegram 消息（确保用户看到失败通知）
+              // 如果启动失败，发送 Telegram 消息
               sendTelegramMessage(`❌ *Webhook 重启最终失败*\n\n应用: ${appConfig.name}\n错误: ${e.message}`).catch(console.error);
             })
         );
