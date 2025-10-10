@@ -5,8 +5,8 @@ let APP_URLS = "";                  // SAP应用URL，支持每行填写一个UR
 let MONITORED_APPS = [];            // 请勿修改
 
 // 离线重启通知 Telegram配置(可选)
-let CHAT_ID = "";    // Telegram聊天CHAT_ID,直接填写或设置环境变量，变量名：CHAT_ID
-let BOT_TOKEN = "";    // Telegram机器人TOKEN,直接填写或设置环境变量，变量名：BOT_TOKEN
+let CHAT_ID = "";    // Telegram聊天CHAT_ID,直接填写或设置环境变量，变量名：TG_CHAT_ID
+let BOT_TOKEN = "";    // Telegram机器人TOKEN,直接填写或设置环境变量，变量名：TG_BOT_TOKEN
 
 // 区域固定常量(无需更改)
 const REGIONS = {
@@ -309,24 +309,41 @@ async function checkAppUrl(appUrl) {
 // 首页
 function generateStatusPage(apps) {
   // 获取当前时间并转换为上海时间（北京时间）
-	const now = new Date();
-	const formattedDate = formatShanghaiTime(now); // 替换了重复的时间转换逻辑
-  
+  const now = new Date();
+  const formattedDate = formatShanghaiTime(now);
+
   const statusCards = apps.map(app => {
     const statusClass = app.healthy ? 'status-up' : 'status-down';
     const statusText = app.healthy ? '运行中' : '已停止';
     const regionName = app.region === 'US' ? '美国' : app.region === 'AP' ? '新加坡' : '未知';
-    
+
     return `
       <div class="status-card ${statusClass}">
         <div class="card-header">
-          <h3>${app.app}</h3>
-            <span class="status-indicator ${statusClass}">${statusText}</span>
+          <div class="app-info">
+            <img src="https://www.sap.cn/favicon.ico" class="app-icon" alt="SAP">
+            <h3>${app.app}</h3>
+          </div>
+          <span class="status-indicator ${statusClass}">${statusText}</span>
         </div>
         <div class="card-body">
-          <p><strong>区域:</strong> ${regionName}&nbsp;&nbsp;|&nbsp;&nbsp;<strong>内存:</strong> ${app.memory || 'N/A'}&nbsp;&nbsp;|&nbsp;&nbsp;<strong>硬盘:</strong> ${app.disk || 'N/A'}</p>
-          <p><strong>组织:</strong> ${app.org || 'N/A'}&nbsp;&nbsp;|&nbsp;&nbsp;<strong>空间:</strong> ${app.space || 'N/A'}</p>
-          <p><strong>URL:</strong> <a href="${app.url}" target="_blank">${app.url}</a></p>
+          <div class="metadata-row">
+            <p><i class="fas fa-globe-asia"></i> 区域：${regionName}</p>
+            <p><i class="fas fa-memory"></i> 内存：${app.memory || 'N/A'}</p>
+            <p><i class="fas fa-hdd"></i> 磁盘：${app.disk || 'N/A'}</p>
+          </div>
+          <div class="metadata-row">
+            <p><i class="fas fa-sitemap"></i> 组织：${app.org || 'N/A'}</p>
+            <p><i class="fas fa-cubes"></i> 空间：${app.space || 'N/A'}</p>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn-restart" onclick="manualRestart('${app.app}', '${app.url}')">
+            <i class="fas fa-redo-alt"></i> 手动重启
+          </button>
+          <a href="${app.url}" target="_blank" class="btn-visit">
+            <i class="fas fa-external-link-alt"></i> 访问项目
+          </a>
         </div>
       </div>
     `;
@@ -340,201 +357,330 @@ function generateStatusPage(apps) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SAP Cloud 应用状态监控</title>
   <link rel="icon" href="https://www.sap.cn/favicon.ico">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"> 
   <style>
     :root {
-      --up-color: #4CAF50;
-      --down-color: #F44336;
-      --card-bg: #ffffff;
-      --bg-color: #f5f5f5;
-      --text-color: #333333;
-      --border-radius: 8px;
-      --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      --up-color: #4CAF50; /* 绿色 */
+      --down-color: #F44336; /* 红色 */
+      --text-color-light: #ffffff; /* 标题文字颜色 */
+      --text-color-dark: #333333; /* 主体文字颜色 */
+      --border-radius: 12px;
+      --box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+      --glass-border: 1px solid rgba(255, 255, 255, 0.4); /* 更明显的玻璃边框 */
     }
     
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
       padding: 0;
-      background-color: var(--bg-color);
-      color: var(--text-color);
+      color: var(--text-color-dark);
+      /* 全局背景图设置 */
+      background-image: url('https://pan.811520.xyz/icon/bg_light.webp');
+      background-size: cover;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
     }
     
     .container {
-      max-width: 1400px;
+      max-width: 1200px;
       margin: 0 auto;
       padding: 20px;
       text-align: center;
     }
     
     header {
-      text-align: center;
       padding: 30px 0 0 0;
-      color: var(--text-color);
-      margin-bottom: 0;
+      margin-bottom: 20px;
     }
     
     h1 {
       margin: 0;
-      font-size: 2.5rem;
+      font-size: 2.8rem;
       font-weight: 700;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      color: transparent;
+      color: var(--text-color-light);
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
     }
     
     .subtitle {
-      font-size: 1.2rem;
-      opacity: 0.9;
+      font-size: 1.3rem;
+      opacity: 1;
       margin-top: 10px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      color: transparent;
-    }
-    
-    .status-grid {
-      display: flex; 
-      flex-wrap: wrap; 
-      justify-content: center;
-      gap: 20px;
-      margin: 0 auto;
-      max-width: 1400px;
-      width: 100%;
-    }
-    
-    .status-card {
-      background: var(--card-bg);
-      border-radius: var(--border-radius);
-      box-shadow: var(--box-shadow);
-      overflow: hidden;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-      flex-grow: 0;
-      flex-shrink: 1; 
-      flex-basis: 450px; 
-      max-width: calc(33.333% - 14px); 
+      color: var(--text-color-light);
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.4);
     }
 
-    .status-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-    }
-    
-    .card-header {
-      padding: 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #eee;
-    }
-    
-    .card-header h3 {
-      margin: 0;
-      font-size: 1.5rem;
-    }
-    
-    .status-indicator {
-      padding: 5px 15px;
-      border-radius: 20px;
-      font-weight: bold;
-      font-size: 0.9rem;
-    }
-    
-    .status-up {
-      background-color: rgba(76, 175, 80, 0.1);
-      color: var(--up-color);
-    }
-    
-    .status-down {
-      background-color: rgba(244, 67, 54, 0.1);
-      color: var(--down-color);
-    }
-    
-    .card-body {
-      padding: 20px;
-      font-size: 0.9rem;
-    }
-    
-    .card-body p {
-      margin: 10px 0;
-    }
-    
-    .card-body a {
-      color: #1976D2;
-      text-decoration: none;
-    }
-    
-    .card-body a:hover {
-      text-decoration: underline;
-    }
-    
-    .last-updated {
-      text-align: center;
-      color: #666;
-      font-size: 0.9rem;
-      margin-top: 30px;
-    }
-    
     .controls {
       text-align: center;
       margin: 30px 0;
+      gap: 15px;
     }
     
     .btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
       color: white;
       border: none;
       padding: 12px 24px;
       font-size: 1rem;
       border-radius: var(--border-radius);
       cursor: pointer;
-      transition: opacity 0.3s ease;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
     }
     
     .btn:hover {
-      opacity: 0.8;
+      opacity: 0.9;
+      transform: translateY(-2px);
+    }
+
+    /* 卡片网格布局 */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 30px;
+      margin: 30px auto;
+      max-width: 1200px;
+      width: 100%;
     }
     
+    /* 毛玻璃卡片效果 */
+    .status-card {
+      /* 半透明毛玻璃背景 */
+      background: rgba(255, 255, 255, 0.15); 
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: var(--border-radius);
+      box-shadow: var(--box-shadow);
+      border: var(--glass-border);
+      overflow: hidden;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .status-up {
+      border-left: 5px solid var(--up-color);
+      color: #000000;
+    }
+    
+    .status-down {
+      border-left: 5px solid var(--down-color);
+      color: #888888;
+    }
+
+    .status-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.45);
+    }
+    
+    .card-header {
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .app-info {
+      display: flex;
+      align-items: center;
+      flex-grow: 1;
+      overflow: hidden;
+    }
+
+    .app-icon {
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+      filter: drop-shadow(0 0 1px rgba(0,0,0,0.5));
+    }
+
+    .card-header h3 {
+      margin: 0;
+      font-size: 1.3rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-header a {
+      color: inherit; /* 继承卡片状态色 (绿或红) */
+      text-decoration: none;
+      transition: color 0.3s;
+      text-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
+
+    .card-header a:hover {
+      opacity: 0.8;
+    }
+
+    .status-indicator {
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    
+    /* 状态指示器 */
+    .status-up .status-indicator {
+      background-color: var(--up-color);
+      color: white;
+    }
+    
+    .status-down .status-indicator {
+      background-color: var(--down-color);
+      color: white;
+    }
+    
+    .card-body {
+      padding: 15px 20px;
+      font-size: 0.95rem;
+      flex-grow: 1;
+    }
+
+    .metadata-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 10px 20px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    
+    .card-body p {
+      margin: 5px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+    }
+
+    /* 卡片内所有 fa 图标颜色与文字保持一致 (白色) */
+    .card-body i {
+      margin-right: 8px;
+      color: inherit; /* 继承卡片状态色 (绿或红) */
+    }
+    
+    .card-footer {
+      padding: 15px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.3);
+      text-align: center;
+      display: flex;
+      gap: 10px;
+    }
+    
+    .card-footer button,
+    .card-footer a.btn-visit {
+      flex: 1;
+      border: none;
+      padding: 10px 15px;
+      font-size: 0.95rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.3s ease, transform 0.2s;
+      text-decoration: none;
+      color: white;
+      text-align: center;
+    }
+
+    /* 手动重启按钮 */
+    .btn-restart {
+      background: var(--up-color);
+    }
+    
+    .btn-restart:hover {
+      background: #388E3C;
+      transform: translateY(-1px);
+    }
+    
+    /* 访问项目按钮 */
+    .btn-visit {
+      background: #0288D1;
+    }
+    
+    .btn-visit:hover {
+      background: #039BE5;
+      transform: translateY(-1px);
+    }
+    
+    .card-footer i {
+      margin-right: 8px;
+      color: white; /* 按钮图标颜色 */
+    }
+
+    /* 页脚样式 */
     footer {
       text-align: center;
       padding: 20px;
-      color: #666;
+      color: #333;
       font-size: 0.9rem;
-      border-top: 1px solid #eee;
-      margin-top: 30px;
-    }
-    
-    .footer-links {
-      font-weight: 700;
-      font-size: larger;
+      border-top: 1px solid #ccc;
       margin-top: 10px;
+      background: none;
     }
     
-    .footer-links a {
-      color: #1976D2;
-      text-decoration: none;
-      margin: 0 10px;
-    }
-    
-    .footer-links a:hover {
-      text-decoration: underline;
+    .footer-line-1 {
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
     }
 
-    @media (max-width: 1100px) {
-      .status-card {
-          max-width: calc(50% - 10px);
+    .footer-line-1 a {
+      color: #333;
+      text-decoration: none;
+      font-weight: normal;
+      transition: color 0.3s;
+    }
+
+    .footer-line-1 a i {
+      margin-right: 5px;
+      color: #333;
+      transition: color 0.3s;
+    }
+    
+    /* 页脚所有链接悬停时变为蓝色 */
+    .footer-line-1 a:hover,
+    .footer-line-1 a:hover i,
+    .footer-line-2 a:hover {
+      color: #007bff;
+    }
+
+    .footer-line-2 {
+      color: #666;
+      font-size: 0.85rem;
+      gap: 10px;
+    }
+    
+    .footer-line-2 a {
+      color: #666;
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+
+    @media (max-width: 1250px) {
+      .status-grid {
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       }
-    }    
+    }
     
     @media (max-width: 768px) {
       .status-grid {
-        max-width: 100%;
-        flex-basis: 100%;
+        grid-template-columns: 1fr;
       }
       h1 {
-        font-size: 2rem;
+        font-size: 2.2rem;
+      }
+      .footer-line-1,
+      .footer-line-2 {
+        flex-direction: column;
+        gap: 8px;
+      }
+      .card-footer {
+        flex-direction: column;
       }
     }
   </style>
@@ -547,30 +693,61 @@ function generateStatusPage(apps) {
     </header>
     
     <div class="controls">
-      <button class="btn" onclick="refreshStatus()">刷新状态</button>
+      <button class="btn" onclick="refreshStatus()" style="margin-right: 15px;">
+        <i class="fas fa-sync-alt"></i> 刷新状态
+      </button>
+      <a href="https://account.hanatrial.ondemand.com/" class="btn" target="_blank" style="text-decoration: none;">
+        <i class="fas fa-external-link-alt"></i> 登录官网
+      </a>
     </div>
     
     <div class="status-grid">
       ${statusCards}
     </div>
-    
-    <div class="last-updated">
-      最后更新: ${formattedDate}
+
+  </div> <footer>
+    <div class="footer-line-1">
+      <span>&copy; ${new Date().getFullYear()} Copyright by Yutian81</span>
+      |
+      <a href="https://github.com/yutian81/Keepalive/tree/main/webhook-action" target="_blank"><i class="fab fa-github"></i> Github</a>
+      |
+      <a href="https://blog.811520.xyz/post/2025/09/250916-uptime-action/" target="_blank"><i class="fas fa-blog"></i> QingYun Blog</a>
     </div>
-    
-    <footer>
-      <div class="footer-links">
-        <a href="https://github.com/yutian81/Keepalive/tree/main/webhook-action" target="_blank">Yutian81 GitHub</a>
-        <a href="https://blog.811520.xyz/post/2025/09/250916-uptime-action/" target="_blank">QingYun Blog</a>
-        <a href="https://github.com/eooce/Auto-deploy-sap-and-keepalive" target="_blank">Eooce Github</a>
-      </div>
-      <p>&copy; ${new Date().getFullYear()} Auto-SAP. All rights reserved.</p>
-    </footer>
-  </div>
-  
+    <div class="footer-line-2">
+      原作者: <a href="https://github.com/eooce/Auto-deploy-sap-and-keepalive" target="_blank">eooce</a> | 状态更新: ${formattedDate}
+    </div>
+  </footer>
+
   <script>
     function refreshStatus() {
       location.reload();
+    }
+    
+    function manualRestart(appName, appUrl) {
+      if (confirm(\`确认要手动重启应用：\${appName} 吗？\n\n警告：这会向监控 Worker 发送重启请求。\`)) {
+        // 1. 获取 Worker 自身的域名（从当前页面的 host 获取）
+        const workerDomain = window.location.host;
+        
+        // 2. 构造完整的重启 Webhook URL
+        const restartUrl = \`https://\${workerDomain}/webhook/restart?appUrl=\${encodeURIComponent(appUrl)}\`;
+        
+        console.log(\`Sending restart request to: \${restartUrl}\`);
+
+        // 3. 发送重启请求
+        fetch(restartUrl, { method: 'GET' }) 
+          .then(response => response.json())
+          .then(data => {
+            if (data.ok) {
+              alert(\`应用 \${appName} 重启请求已发送（代码 \${data.msg}）。请稍后刷新页面查看状态\`);
+            } else {
+              alert(\`重启请求发送失败: \${data.error || '未知错误'}\`);
+            }
+          })
+          .catch(error => {
+            console.error('重启请求出错:', error);
+            alert('网络或服务请求错误，请检查控制台。');
+          });
+      }
     }
   </script>
 </body>
@@ -725,8 +902,8 @@ export default {
     password = env.PASSWORD || password;
     APP_URLS = env.APP_URLS;
     MONITORED_APPS = initializeAppsList(APP_URLS);
-    CHAT_ID = env.CHAT_ID || CHAT_ID;
-    BOT_TOKEN = env.BOT_TOKEN || BOT_TOKEN;
+    CHAT_ID = env.TG_CHAT_ID || CHAT_ID;
+    BOT_TOKEN = env.TG_BOT_TOKEN || BOT_TOKEN;
 
     if (MONITORED_APPS.length === 0 && !request.url.includes("/webhook/restart")) {
       // 如果应用列表为空，且不是重启请求，则返回配置错误页面
