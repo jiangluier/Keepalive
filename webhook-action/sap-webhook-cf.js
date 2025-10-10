@@ -445,7 +445,7 @@ function generateStatusPage(apps) {
     /* 毛玻璃卡片效果 */
     .status-card {
       /* 半透明毛玻璃背景 */
-      background: rgba(255, 255, 255, 0.15); 
+      background: rgba(255, 255, 255, 0.3); 
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       border-radius: var(--border-radius);
@@ -758,19 +758,21 @@ function generateStatusPage(apps) {
 // 核心启动逻辑
 async function ensureAppRunning(appConfig, reason = "unknown") {
   const { url, name } = appConfig;
+  const now = new Date();
+  const formattedTime = formatShanghaiTime(now);
   
   console.log(`[trigger] ${reason} for app ${name} at ${new Date().toISOString()}`);
   
   // 检查应用URL状态
   const isAppHealthy = await checkAppUrl(url);
-  if (isAppHealthy) {
-    console.log(`[decision] ${url} 返回200，应用正常运行，无需启动`);
-    return { app: name, status: "healthy", url: url, healthy: true };
-  }
+    if (isAppHealthy) {
+        console.log(`[decision] ${url} 返回200, 应用正常运行, 无需重启`);
+        const healthyMessage = `👍 *SAP应用状态良好*\n\n应用名称: ${name}\n应用URL: ${url}\n时间: ${formattedTime}\n\n应用运行正常, 无需重启`;
+        await sendTelegramMessage(healthyMessage);
+        return { app: name, status: "healthy", url: url, healthy: true };
+      }
   
   // 发送离线提醒（使用上海时间）
-  const now = new Date();
-  const formattedTime = formatShanghaiTime(now);
   const offlineMessage = `⚠️ *SAP应用离线提醒*\n\n应用名称: ${name}\n应用URL: ${url}\n触发原因: ${reason}\n时间: ${formattedTime}\n\n正在尝试重启应用...`;
   await sendTelegramMessage(offlineMessage);
   
@@ -812,8 +814,6 @@ async function ensureAppRunning(appConfig, reason = "unknown") {
     await waitProcessInstancesRunning(regionConfig.CF_API, token, processGuid);
   } catch (e) {
     console.error(`[wait-error] 应用未能在规定时间启动或运行: ${e.message}`);
-    const failedMessage = `❌ *SAP应用重启失败（启动超时）*\n\n应用名称: ${name}\n应用URL: ${url}\n时间: ${formatShanghaiTime(new Date())}\n\n错误信息: ${e.message}`;
-    await sendTelegramMessage(failedMessage);
     // 抛出错误，以便 Webhook 调用的 ctx.waitUntil 捕获
     throw e; 
   }
@@ -824,7 +824,7 @@ async function ensureAppRunning(appConfig, reason = "unknown") {
   
   const isAppHealthyAfterStart = await checkAppUrl(url);
   if (isAppHealthyAfterStart) {
-    console.log("[success] 应用启动成功，URL状态正常");
+    console.log("[success] 应用启动成功, URL状态正常");
     // 发送重启成功提醒
     const successMessage = `✅ *SAP应用重启成功*\n\n应用名称: ${name}\n应用URL: ${url}\n时间: ${formatShanghaiTime(new Date())}`;
     await sendTelegramMessage(successMessage);
@@ -930,11 +930,17 @@ export default {
         }
         
         // 使用 ctx.waitUntil 允许长时间运行的重启任务在 Webhook 响应后继续执行
-        ctx.waitUntil(ensureAppRunning(appConfig, "webhook-trigger").then(result => {
-          console.log(`Webhook 重启结果 (${appConfig.name}):`, result);
-        }).catch(e => {
-          console.error(`Webhook 重启失败 (${appConfig.name}):`, e.message);
-        }));
+        ctx.waitUntil(
+          ensureAppRunning(appConfig, "webhook-trigger")
+            .then(result => {
+              console.log(`Webhook 重启结果 (${appConfig.name}):`, result);
+            })
+            .catch(e => {
+              console.error(`Webhook 重启失败 (${appConfig.name}):`, e.message);
+              // 额外的：如果启动失败，再发送一次 Telegram 消息（确保用户看到失败通知）
+              sendTelegramMessage(`❌ *Webhook 重启最终失败*\n\n应用: ${appConfig.name}\n错误: ${e.message}`).catch(console.error);
+            })
+        );
         
         // 立即返回 202 Accepted 响应给 Uptime Kuma
         return json({ ok: true, msg: `已接收应用 ${appConfig.name} 的离线通知，后台正在尝试启动`, target_app: appConfig.name }, 202);
