@@ -122,7 +122,7 @@ class PellaAutoRenew:
         return "无法提取", -1.0 # 未找到或格式不匹配
 
     def login(self):
-        """执行登录流程，并等待跳转到 HOME 页面 (已优化，移除硬编码 URL 跳转)"""
+        """执行登录流程，并等待跳转到 HOME 页面 (已优化登录步骤稳定性)"""
         logger.info(f"🔑 开始登录流程")
         self.driver.get(self.LOGIN_URL)
         
@@ -142,12 +142,22 @@ class PellaAutoRenew:
             logger.info("🔍 查找并点击 Continue 按钮 (进入密码输入阶段)...")
             # 查找文本为 'Continue' 的按钮
             continue_btn_1 = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
+            
+            # 记录当前 URL，用于等待 URL 改变
+            initial_url = self.driver.current_url 
+            
             self.driver.execute_script("arguments[0].click();", continue_btn_1)
             logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
             
+            # **【稳定性增强 1】等待 URL 变化，确认页面已切换到密码输入流程**
+            logger.info("⏳ 等待页面 URL 变化...")
+            WebDriverWait(self.driver, 10).until(EC.url_changes(initial_url))
+            logger.info("✅ 页面已切换至密码输入流程")
+
             # 3. 等待密码输入框出现
             logger.info("⏳ 等待密码输入框出现...")
-            password_input = self.wait_for_element_clickable(By.ID, "password-field", 15)
+            # **【稳定性增强 2】使用 presence_of_element_located 确保元素存在**
+            password_input = self.wait_for_element_present(By.ID, "password-field", 15)
             logger.info("✅ 密码输入框已出现")
 
             # 4. 输入密码
@@ -155,8 +165,12 @@ class PellaAutoRenew:
             password_input.send_keys(self.password)
             logger.info("✅ 密码输入完成")
             
-        except TimeoutException:
-            raise Exception("❌ 找不到密码输入框。在点击第一个 Continue 按钮后，密码框未在预期时间内加载。")
+        except TimeoutException as te:
+            # 区分是等待 URL 变化超时还是等待密码框超时
+            if 'password-field' in str(te):
+                raise Exception("❌ 找不到密码输入框。在点击第一个 Continue 按钮后，密码框未在预期时间内加载。")
+            else:
+                raise Exception(f"❌ 登录流程失败 (URL切换超时): {te}")
         except Exception as e:
             raise Exception(f"❌ 登录流程失败 (步骤 2/3): {e}")
 
@@ -300,7 +314,7 @@ class PellaAutoRenew:
                 self.driver.get(self.server_url)
                 time.sleep(3) # 允许刷新和元素重新加载
 
-        
+            
             # 检查是否因为未找到按钮而结束
             if renewed_count == 0:
                 # 检查是否有禁用的按钮存在，以确认是否真的已续期
