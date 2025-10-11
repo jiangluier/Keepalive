@@ -3,7 +3,7 @@
 Pella 自动续期脚本 (增强稳定性)
 支持单账号和多账号
 
-配置变量说明 (兼容 Pella/Leaflow):
+配置变量说明:
 - 单账号变量:
     - PELLA_EMAIL / LEAFLOW_EMAIL=登录邮箱
     - PELLA_PASSWORD / LEAFLOW_PASSWORD=登录密码
@@ -145,10 +145,9 @@ class PellaAutoRenew:
             self.driver.execute_script("arguments[0].click();", continue_btn_1)
             logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
             
-            # 3. 等待密码输入框出现 (替代硬编码 URL 跳转)
+            # 3. 等待密码输入框出现 (解决上一次的超时问题)
             logger.info("⏳ 等待密码输入框出现...")
-            # 密码输入框的 name 属性为 'password'
-            password_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='password']", 15)
+            password_input = self.wait_for_element_clickable(By.ID, "password-field", 15)
             logger.info("✅ 密码输入框已出现")
 
             # 4. 输入密码
@@ -161,14 +160,12 @@ class PellaAutoRenew:
         except Exception as e:
             raise Exception(f"❌ 登录流程失败 (步骤 2/3): {e}")
 
-        # 5. 点击 Continue 按钮 (最终登录提交)
+        # 5. 点击 Continue 按钮提交登录
         try:
-            logger.info("🔍 查找最终 Continue 登录按钮...")
-            # 这是最终的登录提交按钮，可能与前一个按钮是同一个元素，但状态变化
+            logger.info("🔍 查找 Continue 登录按钮...")
             login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
-            
             self.driver.execute_script("arguments[0].click();", login_btn)
-            logger.info("✅ 已点击最终 Continue 登录按钮")
+            logger.info("✅ 已点击 Continue 登录按钮")
             
         except Exception as e:
             raise Exception(f"❌ 点击最终 Continue 按钮失败: {e}")
