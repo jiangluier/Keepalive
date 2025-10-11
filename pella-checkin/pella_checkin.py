@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class PellaAutoRenew:
     # 配置class类常量
     LOGIN_URL = "https://www.pella.app/login"
-    # 登录后会跳转到类似 https://www.pella.app/server/SERVER_ID 的页面
+    HOME_URL = "https://www.pella.app/home"
     RENEW_WAIT_TIME = 10  # 点击续期链接后在新页面等待的秒数
     WAIT_TIME_AFTER_LOGIN = 20  # 登录后等待的秒数
     RETRY_WAIT_TIME_PAGE_LOAD = 15 # 页面加载每次重试等待时间
@@ -94,7 +94,6 @@ class PellaAutoRenew:
         # 1. 输入邮箱
         try:
             logger.info("🔍 查找邮箱输入框...")
-            # Pella 邮箱输入框 selector: input[name='identifier'] 或 input[type='text'][placeholder*='email']
             email_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='identifier']", 10)
             email_input.clear()
             email_input.send_keys(self.email)
@@ -106,7 +105,6 @@ class PellaAutoRenew:
         # 2. 输入密码
         try:
             logger.info("🔍 查找密码输入框...")
-            # Pella 密码输入框 selector: input[name='password'] 或 input[type='password'][placeholder*='password']
             password_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='password']", 10)
             password_input.clear()
             password_input.send_keys(self.password)
@@ -118,33 +116,27 @@ class PellaAutoRenew:
         # 3. 点击 Continue 按钮
         try:
             logger.info("🔍 查找 Continue 登录按钮...")
-            # Pella 登录按钮 selector: button:has(span:contains('Continue')) 或 .cl-formButtonPrimary
-            # 尝试使用 XPATH
             login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             
-            # 使用 JavaScript 点击，避免被 Captcha 覆盖导致点击无效
             self.driver.execute_script("arguments[0].click();", login_btn)
             logger.info("✅ 已点击 Continue 登录按钮")
             
         except Exception as e:
             raise Exception(f"❌ 点击 Continue 按钮失败: {e}")
         
-        # 4. 等待登录完成并获取服务器页面 URL
+        # 4. 等待登录完成并跳转到 HOME 页面
         try:
             WebDriverWait(self.driver, self.WAIT_TIME_AFTER_LOGIN).until(
-                lambda driver: "/server/" in driver.current_url
+                EC.url_to_be(self.HOME_URL) # 确认跳转到 home 页面
             )
             
-            current_url = self.driver.current_url
-            if "/server/" in current_url:
-                self.server_url = current_url
-                logger.info(f"✅ 登录成功，当前服务器URL: {self.server_url}")
+            if self.driver.current_url == self.HOME_URL:
+                logger.info(f"✅ 登录成功，当前URL: {self.HOME_URL}")
                 return True
             else:
-                raise Exception("⚠️ 登录后未跳转到服务器页面")
+                raise Exception("⚠️ 登录后未跳转到 HOME 页面")
                 
         except TimeoutException:
-            # 检查是否有错误消息，Pella 可能会在页面上显示错误
             try:
                 error_msg = self.driver.find_element(By.CSS_SELECTOR, ".cl-auth-form-error-message, .cl-alert-danger")
                 if error_msg.is_displayed():
@@ -153,10 +145,50 @@ class PellaAutoRenew:
                 pass
             raise Exception("⚠️ 登录超时，无法确认登录状态")
 
+    def get_server_url(self):
+        """在 HOME 页面查找并点击服务器链接，获取服务器 URL"""
+        logger.info("🔍 在 HOME 页面查找服务器链接并跳转...")
+        
+        if self.driver.current_url != self.HOME_URL:
+             # 如果不在 home 页面，先跳转
+            self.driver.get(self.HOME_URL)
+            time.sleep(5)
+            
+        try:
+            # 查找服务器链接元素：它是一个包含 href="/server/" 的 <a> 标签
+            server_link_selector = "a[href*='/server/']"
+            
+            server_link_element = self.wait_for_element_clickable(
+                By.CSS_SELECTOR, server_link_selector, 15
+            )
+            
+            # 获取链接并点击
+            server_url = server_link_element.get_attribute('href')
+            server_link_element.click()
+            
+            # 等待页面跳转完成
+            WebDriverWait(self.driver, 10).until(
+                EC.url_contains("/server/")
+            )
+            
+            self.server_url = self.driver.current_url
+            logger.info(f"✅ 成功跳转到服务器页面: {self.server_url}")
+            return True
+            
+        except TimeoutException:
+            raise Exception("❌ 在 HOME 页面找不到服务器链接或跳转超时")
+        except NoSuchElementException:
+            raise Exception("❌ 在 HOME 页面找不到服务器链接")
+        except Exception as e:
+            raise Exception(f"❌ 点击服务器链接时出现意外错误: {e}")
+    
     def renew_server(self):
-        """执行续期流程"""
-        logger.info(f"👉 跳转到服务器页面: {self.server_url}")
-        self.driver.get(self.server_url)
+        """执行续期流程 - 仅在 self.server_url 已设置时运行"""
+        if not self.server_url:
+            raise Exception("❌ 缺少服务器 URL，无法执行续期")
+            
+        logger.info(f"👉 开始在服务器页面 ({self.server_url}) 执行续期流程")
+        self.driver.get(self.server_url) # 确保在正确的页面
         time.sleep(5) # 基础等待
 
         # 1. 提取初始过期时间
@@ -211,7 +243,7 @@ class PellaAutoRenew:
                 self.driver.switch_to.window(original_window)
                 logger.info(f"✅ 第 {i} 个续期链接处理完成")
                 renewed_count += 1
-                time.sleep(2) # 间隔一下
+                time.sleep(5) # 间隔5秒
 
             # 3. 重新加载服务器页面并获取新的过期时间
             if renewed_count > 0:
@@ -243,12 +275,16 @@ class PellaAutoRenew:
         try:
             logger.info(f"⏳ 开始处理账号")
             
-            # 登录
+            # 1. 登录
             if self.login():
-                # 续期
-                result = self.renew_server()
-                logger.info(f"📋 续期结果: {result}")
-                return True, result
+                # 2. 跳转到服务器页面并获取 URL
+                if self.get_server_url():
+                    # 3. 续期
+                    result = self.renew_server()
+                    logger.info(f"📋 续期结果: {result}")
+                    return True, result
+                else:
+                    raise Exception("❌ 无法获取服务器URL")
             else:
                 raise Exception("❌ 登录失败")
                 
@@ -270,7 +306,6 @@ class MultiAccountManager:
         self.accounts = self.load_accounts()
     
     def load_accounts(self):
-        # 保持与 Leaflow 脚本兼容的加载逻辑，但使用 Pella 的环境变量名
         accounts = []
         logger.info("⏳ 开始加载账号配置...")
         
