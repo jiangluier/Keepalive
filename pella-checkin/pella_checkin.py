@@ -122,7 +122,7 @@ class PellaAutoRenew:
         return "无法提取", -1.0 # 未找到或格式不匹配
 
     def login(self):
-        """执行登录流程，并等待跳转到 HOME 页面 (已优化登录步骤稳定性)"""
+        """执行登录流程，并等待跳转到 HOME 页面 (增强事件触发稳定性)"""
         logger.info(f"🔑 开始登录流程")
         self.driver.get(self.LOGIN_URL)
         
@@ -134,6 +134,16 @@ class PellaAutoRenew:
             email_input.clear()
             email_input.send_keys(self.email)
             logger.info("✅ 邮箱输入完成")
+
+            # 【稳定性增强 3】使用 JavaScript 触发输入事件，确保继续按钮被激活
+            logger.info("⚡ 触发 JavaScript 输入事件...")
+            js_script = """
+            arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+            arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+            """
+            self.driver.execute_script(js_script, email_input)
+            logger.info("✅ 事件触发完成")
+            
         except Exception as e:
             raise Exception(f"❌ 输入邮箱或页面加载超时: {e}")
             
@@ -156,7 +166,7 @@ class PellaAutoRenew:
 
             # 3. 等待密码输入框出现
             logger.info("⏳ 等待密码输入框出现...")
-            # 【稳定性增强 2 - 修正】使用 input[type='password'] 代替固定的 ID，因为 ID 可能已变化
+            # 使用 input[type='password']
             password_selector = "input[type='password']" 
             password_input = self.wait_for_element_present(By.CSS_SELECTOR, password_selector, 15)
             logger.info("✅ 密码输入框已出现")
@@ -165,6 +175,11 @@ class PellaAutoRenew:
             password_input.clear()
             password_input.send_keys(self.password)
             logger.info("✅ 密码输入完成")
+            
+            # 【稳定性增强 4】密码输入后也触发事件，确保最终登录按钮激活
+            logger.info("⚡ 触发 JavaScript 密码输入事件...")
+            self.driver.execute_script(js_script, password_input)
+            logger.info("✅ 密码事件触发完成")
             
         except TimeoutException as te:
             # 修正错误处理逻辑，明确区分是 URL 切换超时还是密码框等待超时
