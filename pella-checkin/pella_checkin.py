@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-Pella 多账号自动续期脚本
-支持冒号分隔多账号和单账号配置
+Pella 自动续期脚本
+支持单账号和多账号
+单账号变量 PELLA_EMAIL=登录邮箱，PELLA_PASSWORD=登录密码
+多账号变量 PELLA_ACCOUNTS，格式：邮箱1:密码1,邮箱2:密码2,邮箱3:密码3
 """
 
 import os
 import time
 import logging
 import re
+import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-import requests
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -23,19 +25,20 @@ logger = logging.getLogger(__name__)
 class PellaAutoRenew:
     # 配置class类常量
     LOGIN_URL = "https://www.pella.app/login"
-    HOME_URL = "https://www.pella.app/home"
-    RENEW_WAIT_TIME = 10  # 点击续期链接后在新页面等待的秒数
-    WAIT_TIME_AFTER_LOGIN = 20  # 登录后等待的秒数
-    RETRY_WAIT_TIME_PAGE_LOAD = 15 # 页面加载每次重试等待时间
-    RETRY_COUNT_PAGE_LOAD = 3 # 页面加载重试次数
+    HOME_URL = "https://www.pella.app/home" # 登录后跳转的首页
+    RENEW_WAIT_TIME = 5  # 点击续期链接后在新页面等待的秒数
+    WAIT_TIME_AFTER_LOGIN = 10  # 登录后等待的秒数
 
     def __init__(self, email, password):
         self.email = email
         self.password = password
         self.telegram_bot_token = os.getenv('TG_BOT_TOKEN', '')
         self.telegram_chat_id = os.getenv('TG_CHAT_ID', '')
-        self.initial_expiry_days = -1
-        self.server_url = None
+        
+        # 存储初始时间的详细信息 (字符串) 和总天数 (浮点数)
+        self.initial_expiry_details = "N/A" 
+        self.initial_expiry_value = -1.0 
+        self.server_url = None # 用于存储找到的服务器详情页URL
         
         if not self.email or not self.password:
             raise ValueError("邮箱和密码不能为空")
@@ -60,9 +63,13 @@ class PellaAutoRenew:
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
-        self.driver = webdriver.Chrome(options=chrome_options)
-        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
+        try:
+            self.driver = webdriver.Chrome(options=chrome_options)
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        except WebDriverException as e:
+            logger.error(f"❌ 驱动初始化失败，请检查 Chrome/WebDriver 版本是否匹配: {e}")
+            raise
+
     def wait_for_element_clickable(self, by, value, timeout=10):
         """等待元素可点击"""
         return WebDriverWait(self.driver, timeout).until(
@@ -76,16 +83,37 @@ class PellaAutoRenew:
         )
 
     def extract_expiry_days(self, page_source):
-        """从页面源码中提取过期天数"""
-        # 正则表达式匹配 Your server expires in X.
-        match = re.search(r"Your server expires in (\d+D)", page_source)
+        """
+        从页面源码中提取过期时间，并计算总天数（包含小时和分钟的浮点数）。
+        返回: (detailed_time_string, total_days_float)
+        """
+        # 匹配详细时间格式: X D Y H Z M (例如: 2D 3H 7M)
+        # 使用非贪婪匹配确保正确性
+        match = re.search(r"Your server expires in\s*(\d+)D\s*(\d+)H\s*(\d+)M", page_source)
         if match:
-            days_str = match.group(1).replace('D', '')
-            return int(days_str)
-        return -1 # 未找到或格式不匹配
+            days_int = int(match.group(1))
+            hours_int = int(match.group(2))
+            minutes_int = int(match.group(3))
+            
+            detailed_string = f"{days_int} 天 {hours_int} 小时 {minutes_int} 分钟"
+            
+            # 计算总天数（浮点数）
+            total_days_float = days_int + (hours_int / 24) + (minutes_int / (24 * 60))
+            
+            return detailed_string, total_days_float
+            
+        # 兼容简单格式 (例如: 30D)
+        match_simple = re.search(r"Your server expires in\s*(\d+)D", page_source)
+        if match_simple:
+            days_int = int(match_simple.group(1))
+            detailed_string = f"{days_int} 天"
+            return detailed_string, float(days_int)
+            
+        logger.warning("⚠️ 页面中未找到有效的服务器过期时间格式。")
+        return "无法提取", -1.0 # 未找到或格式不匹配
 
     def login(self):
-        """执行登录流程"""
+        """执行登录流程，并等待跳转到 HOME 页面"""
         logger.info(f"🔑 开始登录流程")
         
         self.driver.get(self.LOGIN_URL)
@@ -130,13 +158,14 @@ class PellaAutoRenew:
                 EC.url_to_be(self.HOME_URL) # 确认跳转到 home 页面
             )
             
-            if self.driver.current_url == self.HOME_URL:
+            if self.driver.current_url.startswith(self.HOME_URL):
                 logger.info(f"✅ 登录成功，当前URL: {self.HOME_URL}")
                 return True
             else:
-                raise Exception("⚠️ 登录后未跳转到 HOME 页面")
+                raise Exception(f"⚠️ 登录后未跳转到 HOME 页面: 当前 URL 为 {self.driver.current_url}")
                 
         except TimeoutException:
+            # 检查是否有登录错误信息
             try:
                 error_msg = self.driver.find_element(By.CSS_SELECTOR, ".cl-auth-form-error-message, .cl-alert-danger")
                 if error_msg.is_displayed():
@@ -149,15 +178,16 @@ class PellaAutoRenew:
         """在 HOME 页面查找并点击服务器链接，获取服务器 URL"""
         logger.info("🔍 在 HOME 页面查找服务器链接并跳转...")
         
-        if self.driver.current_url != self.HOME_URL:
-             # 如果不在 home 页面，先跳转
+        # 确保当前在 HOME 页面
+        if not self.driver.current_url.startswith(self.HOME_URL):
             self.driver.get(self.HOME_URL)
-            time.sleep(5)
+            time.sleep(5) # 页面加载等待
             
         try:
             # 查找服务器链接元素：它是一个包含 href="/server/" 的 <a> 标签
             server_link_selector = "a[href*='/server/']"
             
+            # 使用 wait_for_element_clickable 确保元素存在且可交互
             server_link_element = self.wait_for_element_clickable(
                 By.CSS_SELECTOR, server_link_selector, 15
             )
@@ -176,7 +206,7 @@ class PellaAutoRenew:
             return True
             
         except TimeoutException:
-            raise Exception("❌ 在 HOME 页面找不到服务器链接或跳转超时")
+            raise Exception("❌ 在 HOME 页面找不到服务器链接或跳转超时 (15s)")
         except NoSuchElementException:
             raise Exception("❌ 在 HOME 页面找不到服务器链接")
         except Exception as e:
@@ -193,17 +223,16 @@ class PellaAutoRenew:
 
         # 1. 提取初始过期时间
         page_source = self.driver.page_source
-        self.initial_expiry_days = self.extract_expiry_days(page_source)
-        logger.info(f"ℹ️ 初始服务器过期时间: {self.initial_expiry_days} 天")
+        self.initial_expiry_details, self.initial_expiry_value = self.extract_expiry_days(page_source)
+        logger.info(f"ℹ️ 初始服务器过期时间: {self.initial_expiry_details} (约 {self.initial_expiry_value:.2f} 天)")
 
-        if self.initial_expiry_days == -1:
-             raise Exception("❌ 无法提取初始过期时间，可能页面加载失败或元素变化")
+        if self.initial_expiry_value == -1.0:
+            raise Exception("❌ 无法提取初始过期时间，可能页面加载失败或元素变化")
 
         # 2. 查找并点击所有续期按钮
         try:
-            # 查找所有带有 href 且文本为 "Claim" 的 a 标签
-            # 或者更精确地，查找 class 包含 rounded-md 的 a 标签，并排除 class 包含 pointer-events-none 的
-            renew_link_selectors = "a.rounded-md:not(.pointer-events-none)"
+            # 查找所有带有 href 且没有被禁用的链接
+            renew_link_selectors = "a[href*='/renew/']:not(.opacity-50):not(.pointer-events-none)"
             
             WebDriverWait(self.driver, 10).until(
                 EC.presence_of_all_elements_located((By.CSS_SELECTOR, renew_link_selectors))
@@ -212,13 +241,7 @@ class PellaAutoRenew:
             renew_buttons = self.driver.find_elements(By.CSS_SELECTOR, renew_link_selectors)
             
             if not renew_buttons:
-                # 再次尝试更通用的链接，查找 href 包含 /renew/ 的链接
-                renew_buttons = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='/renew/']")
-                # 筛选掉已经 Claimed 的（即 class 中有 opacity-50 或 pointer-events-none 的）
-                renew_buttons = [btn for btn in renew_buttons if 'opacity-50' not in btn.get_attribute('class') and 'pointer-events-none' not in btn.get_attribute('class')]
-
-            if not renew_buttons:
-                 return "⏳ 未找到可点击的续期按钮，可能今日已续期。"
+                return "⏳ 未找到可点击的续期按钮，可能今日已续期。"
 
             logger.info(f"👉 找到 {len(renew_buttons)} 个可点击的续期链接")
             
@@ -229,7 +252,7 @@ class PellaAutoRenew:
                 renew_url = button.get_attribute('href')
                 logger.info(f"🚀 开始处理第 {i} 个续期链接: {renew_url}")
                 
-                # 在新标签页中打开链接
+                # 在新标签页中打开链接，避免主页面状态被破坏
                 self.driver.execute_script("window.open(arguments[0]);", renew_url)
                 time.sleep(1)
                 
@@ -244,36 +267,48 @@ class PellaAutoRenew:
                 logger.info(f"✅ 第 {i} 个续期链接处理完成")
                 renewed_count += 1
                 time.sleep(5) # 间隔5秒
-
+            
             # 3. 重新加载服务器页面并获取新的过期时间
             if renewed_count > 0:
                 logger.info("🔄 重新加载服务器页面以检查续期结果...")
                 self.driver.get(self.server_url)
                 time.sleep(5)
                 
-                final_expiry_days = self.extract_expiry_days(self.driver.page_source)
-                logger.info(f"ℹ️ 最终服务器过期时间: {final_expiry_days} 天")
+                final_expiry_details, final_expiry_value = self.extract_expiry_days(self.driver.page_source)
+                logger.info(f"ℹ️ 最终服务器过期时间: {final_expiry_details} (约 {final_expiry_value:.2f} 天)")
                 
-                if final_expiry_days > self.initial_expiry_days:
-                    return f"✅ 续期成功! 初始 {self.initial_expiry_days} 天 -> 最终 {final_expiry_days} 天 (共续期 {final_expiry_days - self.initial_expiry_days} 天)"
-                elif final_expiry_days == self.initial_expiry_days:
-                    return f"⚠️ 续期操作完成，但天数未增加 ({final_expiry_days} 天)。可能续期未生效或当天无额外时间。"
+                # 比较浮点数
+                if final_expiry_value > self.initial_expiry_value:
+                    days_added = final_expiry_value - self.initial_expiry_value
+                    
+                    # 将增加的天数浮点值转换为详细的 D/H/M 字符串
+                    added_seconds = round(days_added * 24 * 3600)
+                    added_days = int(added_seconds // (24 * 3600))
+                    added_hours = int((added_seconds % (24 * 3600)) // 3600)
+                    added_minutes = int((added_seconds % 3600) // 60)
+                    added_string = f"{added_days} 天 {added_hours} 小时 {added_minutes} 分钟"
+
+                    return (f"✅ 续期成功! 初始 {self.initial_expiry_details} -> 最终 {final_expiry_details} "
+                            f"(共续期 {added_string})")
+                            
+                elif final_expiry_value == self.initial_expiry_value:
+                    return f"⚠️ 续期操作完成，但天数未增加 ({final_expiry_details})。可能续期未生效或当天无额外时间。"
                 else:
-                    return f"❌ 续期操作完成，但天数不升反降! 初始 {self.initial_expiry_days} 天 -> 最终 {final_expiry_days} 天"
+                    return f"❌ 续期操作完成，但天数不升反降! 初始 {self.initial_expiry_details} -> 最终 {final_expiry_details}"
             else:
-                 return "⏳ 未执行续期操作，因为没有找到可点击的续期链接。"
+                return "⏳ 未执行续期操作，因为没有找到可点击的续期链接。"
 
         except TimeoutException:
             raise Exception("❌ 页面元素加载超时")
         except NoSuchElementException as e:
-             raise Exception(f"❌ 续期元素查找失败: {e}")
+            raise Exception(f"❌ 续期元素查找失败: {e}")
         except Exception as e:
             raise Exception(f"❌ 续期流程中出现意外错误: {e}")
             
     def run(self):
         """单个账号执行流程"""
         try:
-            logger.info(f"⏳ 开始处理账号")
+            logger.info(f"⏳ 开始处理账号: {self.email}")
             
             # 1. 登录
             if self.login():
@@ -284,9 +319,9 @@ class PellaAutoRenew:
                     logger.info(f"📋 续期结果: {result}")
                     return True, result
                 else:
-                    raise Exception("❌ 无法获取服务器URL")
+                    return False, "❌ 无法获取服务器URL"
             else:
-                raise Exception("❌ 登录失败")
+                return False, "❌ 登录失败"
                 
         except Exception as e:
             error_msg = f"❌ 自动续期失败: {str(e)}"
@@ -420,6 +455,7 @@ class MultiAccountManager:
         results = []
         
         for i, account in enumerate(self.accounts, 1):
+            logger.info(f"==================================================")
             logger.info(f"👉 处理第 {i}/{len(self.accounts)} 个账号: {account['email']}")
             
             try:
@@ -439,6 +475,7 @@ class MultiAccountManager:
                 logger.error(error_msg)
                 results.append((account['email'], False, error_msg))
         
+        logger.info(f"==================================================")
         # 发送汇总通知
         self.send_notification(results)
         
@@ -458,8 +495,12 @@ def main():
         else:
             success_count = sum(1 for _, success, _ in detailed_results if success)
             logger.warning(f"⚠️ 部分账号续期失败: {success_count}/{len(detailed_results)} 成功")
+            # 允许部分成功，但退出代码仍为 0
             exit(0)
             
+    except ValueError as e:
+        logger.error(f"❌ 脚本因配置错误退出: {e}")
+        exit(1)
     except Exception as e:
         logger.error(f"❌ 脚本执行出错: {e}")
         exit(1)
