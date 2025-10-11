@@ -136,14 +136,13 @@ class PellaAutoRenew:
             self.driver.execute_script("arguments[0].click();", continue_btn_1)
             logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
             
-            # --- 强制刷新修复 ---
-            logger.info("⏳ 等待页面切换完成 (2秒基础等待)...")
-            time.sleep(2) 
-            logger.info("⚡️ 检测到页面跳转异常，执行强制刷新以加载密码输入框...")
-            self.driver.refresh()
+            # 强制 URL 导航到 #/factor-one
+            target_url = self.LOGIN_URL + '#/factor-one'
+            logger.info(f"⚡️ 检测到页面切换异常，强制跳转到密码输入 URL: {target_url}")
+            self.driver.get(target_url) 
             time.sleep(3)
 
-            # 不再依赖 URL 切换，直接等待密码输入框出现并可点击
+            # 3. 再次等待密码输入框出现
             logger.info("⏳ 等待密码输入框出现...")
             # 密码输入框的 name 属性为 'password', 使用 wait_for_element_clickable 确保元素已加载且可操作
             password_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='password']", 10)
@@ -193,7 +192,7 @@ class PellaAutoRenew:
             except:
                 pass
             raise Exception("⚠️ 登录超时，无法确认登录状态")
-
+    
     def get_server_url(self):
         """在 HOME 页面查找并点击服务器链接，获取服务器 URL"""
         logger.info("🔍 在 HOME 页面查找服务器链接并跳转...")
