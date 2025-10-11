@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pella 自动续期脚本 (增强稳定性)
+Pella 自动续期脚本 (增强稳定性 - 修复密码框定位问题)
 支持单账号和多账号
 
 配置变量说明:
@@ -149,15 +149,16 @@ class PellaAutoRenew:
             self.driver.execute_script("arguments[0].click();", continue_btn_1)
             logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
             
-            # **【稳定性增强 1】等待 URL 变化，确认页面已切换到密码输入流程**
+            # 【稳定性增强 1】等待 URL 变化，确认页面已切换到密码输入流程
             logger.info("⏳ 等待页面 URL 变化...")
             WebDriverWait(self.driver, 10).until(EC.url_changes(initial_url))
             logger.info("✅ 页面已切换至密码输入流程")
 
             # 3. 等待密码输入框出现
             logger.info("⏳ 等待密码输入框出现...")
-            # **【稳定性增强 2】使用 presence_of_element_located 确保元素存在**
-            password_input = self.wait_for_element_present(By.ID, "password-field", 15)
+            # 【稳定性增强 2 - 修正】使用 input[type='password'] 代替固定的 ID，因为 ID 可能已变化
+            password_selector = "input[type='password']" 
+            password_input = self.wait_for_element_present(By.CSS_SELECTOR, password_selector, 15)
             logger.info("✅ 密码输入框已出现")
 
             # 4. 输入密码
@@ -166,20 +167,24 @@ class PellaAutoRenew:
             logger.info("✅ 密码输入完成")
             
         except TimeoutException as te:
-            # 区分是等待 URL 变化超时还是等待密码框超时
-            if 'password-field' in str(te):
-                raise Exception("❌ 找不到密码输入框。在点击第一个 Continue 按钮后，密码框未在预期时间内加载。")
+            # 修正错误处理逻辑，明确区分是 URL 切换超时还是密码框等待超时
+            if password_selector in str(te):
+                 raise Exception(f"❌ 找不到密码输入框 ({password_selector})。在点击第一个 Continue 按钮后，密码框未在预期时间内加载。")
+            elif "url_changes" in str(te):
+                 raise Exception(f"❌ 登录流程失败 (URL切换超时): URL 在 10 秒内未改变。")
             else:
-                raise Exception(f"❌ 登录流程失败 (URL切换超时): {te}")
+                 raise Exception(f"❌ 登录流程在等待元素时超时: {te}")
+                 
         except Exception as e:
             raise Exception(f"❌ 登录流程失败 (步骤 2/3): {e}")
 
         # 5. 点击 Continue 按钮提交登录
         try:
             logger.info("🔍 查找 Continue 登录按钮...")
+            # 再次查找文本为 'Continue' 的按钮 (新的页面元素)
             login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             self.driver.execute_script("arguments[0].click();", login_btn)
-            logger.info("✅ 已点击 Continue 登录按钮")
+            logger.info("✅ 已点击 Continue 按钮")
             
         except Exception as e:
             raise Exception(f"❌ 点击最终 Continue 按钮失败: {e}")
