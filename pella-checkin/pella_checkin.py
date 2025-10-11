@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pella 自动续期脚本 (增强稳定性 - 修复密码框定位问题)
+Pella 自动续期脚本 (增强稳定性 - 使用 JavaScript 强制输入绕过交互问题)
 支持单账号和多账号
 
 配置变量说明:
@@ -72,7 +72,6 @@ class PellaAutoRenew:
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
         try:
-            # 尝试从环境变量获取驱动路径，如果没有则使用默认
             self.driver = webdriver.Chrome(options=chrome_options)
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         except WebDriverException as e:
@@ -97,18 +96,13 @@ class PellaAutoRenew:
         返回: (detailed_time_string, total_days_float)
         """
         # 匹配详细时间格式: X D Y H Z M (例如: 2D 3H 7M)
-        # 使用非贪婪匹配确保正确性
         match = re.search(r"Your server expires in\s*(\d+)D\s*(\d+)H\s*(\d+)M", page_source)
         if match:
             days_int = int(match.group(1))
             hours_int = int(match.group(2))
             minutes_int = int(match.group(3))
-            
             detailed_string = f"{days_int} 天 {hours_int} 小时 {minutes_int} 分钟"
-            
-            # 计算总天数（浮点数）
             total_days_float = days_int + (hours_int / 24) + (minutes_int / (24 * 60))
-            
             return detailed_string, total_days_float
             
         # 兼容简单格式 (例如: 30D)
@@ -119,84 +113,74 @@ class PellaAutoRenew:
             return detailed_string, float(days_int)
             
         logger.warning("⚠️ 页面中未找到有效的服务器过期时间格式。")
-        return "无法提取", -1.0 # 未找到或格式不匹配
+        return "无法提取", -1.0
 
     def login(self):
-        """执行登录流程，并等待跳转到 HOME 页面 (增强事件触发稳定性)"""
+        """执行登录流程，使用 JS 强制输入绕过 'element not interactable' 错误"""
         logger.info(f"🔑 开始登录流程")
         self.driver.get(self.LOGIN_URL)
+        
+        # JS 脚本：设置值并触发输入事件
+        def js_set_value_and_trigger(element, value):
+            self.driver.execute_script(f"arguments[0].value = '{value}';", element)
+            self.driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", element)
+            self.driver.execute_script("arguments[0].dispatchEvent(new Event('change', { bubbles: true }));", element)
         
         # 1. 输入邮箱
         try:
             logger.info("🔍 查找邮箱输入框...")
-            # 邮箱输入框一般位于第一个 factor-one 阶段，这里使用 CSS 选择器
-            email_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='identifier']", 15)
-            email_input.clear()
-            email_input.send_keys(self.email)
-            logger.info("✅ 邮箱输入完成")
-
-            # 【稳定性增强 3】使用 JavaScript 触发输入事件，确保继续按钮被激活
-            logger.info("⚡ 触发 JavaScript 输入事件...")
-            js_script = """
-            arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
-            arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-            """
-            self.driver.execute_script(js_script, email_input)
-            logger.info("✅ 事件触发完成")
+            # 使用 presence_of_element_located 确保元素存在即可
+            email_input = self.wait_for_element_present(By.CSS_SELECTOR, "input[name='identifier']", 15)
+            
+            # 使用 JS 强制填充值和触发事件
+            js_set_value_and_trigger(email_input, self.email)
+            logger.info("✅ 邮箱输入 (JS 强制填充) 完成")
             
         except Exception as e:
-            raise Exception(f"❌ 输入邮箱或页面加载超时: {e}")
+            raise Exception(f"❌ 查找或输入邮箱失败: {e}")
             
         # 2. 点击 Continue (Identifier 提交)
         try:
             logger.info("🔍 查找并点击 Continue 按钮 (进入密码输入阶段)...")
-            # 查找文本为 'Continue' 的按钮
             continue_btn_1 = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             
-            # 记录当前 URL，用于等待 URL 改变
             initial_url = self.driver.current_url 
             
             self.driver.execute_script("arguments[0].click();", continue_btn_1)
             logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
             
-            # 【稳定性增强 1】等待 URL 变化，确认页面已切换到密码输入流程
+            # 等待 URL 变化
             logger.info("⏳ 等待页面 URL 变化...")
             WebDriverWait(self.driver, 10).until(EC.url_changes(initial_url))
             logger.info("✅ 页面已切换至密码输入流程")
 
             # 3. 等待密码输入框出现
             logger.info("⏳ 等待密码输入框出现...")
-            # 使用 input[type='password']
             password_selector = "input[type='password']" 
+            # 使用 presence_of_element_located 确保元素存在
             password_input = self.wait_for_element_present(By.CSS_SELECTOR, password_selector, 15)
             logger.info("✅ 密码输入框已出现")
 
-            # 4. 输入密码
-            password_input.clear()
-            password_input.send_keys(self.password)
-            logger.info("✅ 密码输入完成")
-            
-            # 【稳定性增强 4】密码输入后也触发事件，确保最终登录按钮激活
-            logger.info("⚡ 触发 JavaScript 密码输入事件...")
-            self.driver.execute_script(js_script, password_input)
-            logger.info("✅ 密码事件触发完成")
+            # 4. 输入密码 (使用 JS 强制填充，解决 element not interactable 问题)
+            js_set_value_and_trigger(password_input, self.password)
+            logger.info("✅ 密码输入 (JS 强制填充) 完成")
             
         except TimeoutException as te:
-            # 修正错误处理逻辑，明确区分是 URL 切换超时还是密码框等待超时
+            # 修正错误处理逻辑
             if password_selector in str(te):
-                 raise Exception(f"❌ 找不到密码输入框 ({password_selector})。在点击第一个 Continue 按钮后，密码框未在预期时间内加载。")
+                 raise Exception(f"❌ 找不到密码输入框 ({password_selector})。密码框未在预期时间内加载。")
             elif "url_changes" in str(te):
                  raise Exception(f"❌ 登录流程失败 (URL切换超时): URL 在 10 秒内未改变。")
             else:
                  raise Exception(f"❌ 登录流程在等待元素时超时: {te}")
                  
         except Exception as e:
+            # 捕获其他如 NoSuchElementException, element not interactable 等错误
             raise Exception(f"❌ 登录流程失败 (步骤 2/3): {e}")
 
         # 5. 点击 Continue 按钮提交登录
         try:
             logger.info("🔍 查找 Continue 登录按钮...")
-            # 再次查找文本为 'Continue' 的按钮 (新的页面元素)
             login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             self.driver.execute_script("arguments[0].click();", login_btn)
             logger.info("✅ 已点击 Continue 按钮")
@@ -219,10 +203,8 @@ class PellaAutoRenew:
         except TimeoutException:
             # 检查是否有登录错误信息
             try:
-                # 尝试查找登录错误信息的通用 CSS 选择器
                 error_msg = self.driver.find_element(By.CSS_SELECTOR, ".cl-auth-form-error-message, .cl-alert-danger")
                 if error_msg.is_displayed():
-                    # 尝试点击任何可能阻止操作的模态框关闭按钮 (可选但推荐)
                     try:
                         close_btn = self.driver.find_element(By.CSS_SELECTOR, "button[aria-label='Close']")
                         self.driver.execute_script("arguments[0].click();", close_btn)
@@ -506,7 +488,6 @@ class MultiAccountManager:
                     status = "❌" # 失败
                 
                 # 隐藏邮箱部分字符以保护隐私
-                # 使用正则表达式安全地提取 @ 符号之前的部分
                 if '@' in email:
                     local_part, domain = email.split('@', 1)
                     masked_local = local_part[:3] + "***"
@@ -548,10 +529,8 @@ class MultiAccountManager:
             success, result = False, "未运行"
 
             try:
-                # 使用新的 PellaAutoRenew 类
                 auto_renew = PellaAutoRenew(account['email'], account['password'])
                 success, result = auto_renew.run()
-                
                 
                 # 在账号之间添加间隔，避免请求过于频繁
                 if i < len(self.accounts):
@@ -586,7 +565,6 @@ def main():
         else:
             success_count = sum(1 for _, success, _ in detailed_results if success)
             logger.warning(f"⚠️ 部分账号续期失败: {success_count}/{len(detailed_results)} 成功")
-            # 允许部分成功，但退出代码仍为 0
             exit(0)
             
     except ValueError as e:
