@@ -175,27 +175,33 @@ class PellaAutoRenew:
         except Exception as e:
             raise Exception(f"❌ 登录流程失败 (步骤 2/3): {e}")
 
-            # 5. 点击 Continue 按钮提交登录
-            try:
-                # 在点击前增加一个短暂等待，确保 JS 验证完成，按钮状态更新
-                logger.info("⏳ 等待 2 秒，确保最终登录按钮被激活...")
-                time.sleep(2) 
-    
-                logger.info("🔍 查找 Continue 登录按钮...")
-                # 【关键修改】延长 wait_for_element_present 的超时时间到 15 秒
-                login_btn = self.wait_for_element_present(By.XPATH, "//button[contains(., 'Continue')]", 15)
-                
-                # 使用 JS 强制点击
-                self.driver.execute_script("arguments[0].click();", login_btn)
-                logger.info("✅ (JS 强制) 已点击 Continue 按钮")
-                
-            except TimeoutException as te:
-                # 捕获超时错误并给出更明确的提示
-                raise Exception(f"❌ 查找最终 Continue 按钮超时 (15s)。可能按钮加载时间过长或页面未成功切换。: {te}")
-            except Exception as e:
-                raise Exception(f"❌ 点击最终 Continue 按钮失败: {e}")
+        # 5. 点击 Continue 按钮提交登录
+        try:
+            # 确保最终登录按钮加载完成
+            logger.info("⏳ 等待 2 秒，确保最终登录按钮被激活...")
+            time.sleep(2) 
+
+            logger.info("🔍 查找 Continue 登录按钮...")
+            login_btn = self.wait_for_element_present(By.XPATH, "//button[contains(., 'Continue')]", 15)
             
-        # 6. 等待登录完成并跳转到 HOME 页面
+            # 使用 JS 强制点击
+            self.driver.execute_script("arguments[0].click();", login_btn)
+            logger.info("✅ (JS 强制) 已点击 Continue 按钮")
+            
+        except TimeoutException as te:
+            raise Exception(f"❌ 查找最终 Continue 按钮超时 (15s)。可能按钮加载时间过长。: {te}")
+        except Exception as e:
+            # 如果强制点击仍然失败，则尝试强制表单提交
+            logger.warning(f"⚠️ 强制点击失败，尝试强制提交表单: {e}")
+            try:
+                # 尝试找到父级表单元素并提交
+                self.driver.execute_script("arguments[0].closest('form').submit();", login_btn)
+                logger.info("✅ (JS 强制) 表单提交成功")
+            except Exception as e_submit:
+                 raise Exception(f"❌ 强制表单提交失败: {e_submit}")
+
+        
+        # 6. 等待登录完成并跳转到 HOME 页面（增强错误捕获）
         try:
             WebDriverWait(self.driver, self.WAIT_TIME_AFTER_LOGIN).until(
                 EC.url_to_be(self.HOME_URL) # 确认跳转到 home 页面
@@ -205,22 +211,30 @@ class PellaAutoRenew:
                 logger.info(f"✅ 登录成功，当前URL: {self.HOME_URL}")
                 return True
             else:
+                # 理论上不会执行到这里，因为 EC.url_to_be 失败会抛出 TimeoutException
                 raise Exception(f"⚠️ 登录后未跳转到 HOME 页面: 当前 URL 为 {self.driver.current_url}")
                 
         except TimeoutException:
-            # 检查是否有登录错误信息
+            # 【核心修正】检查是否有登录错误信息
             try:
-                error_msg = self.driver.find_element(By.CSS_SELECTOR, ".cl-auth-form-error-message, .cl-alert-danger")
-                if error_msg.is_displayed():
+                # 查找 Clerk 常见的错误消息选择器
+                error_msg_element = self.driver.find_element(By.CSS_SELECTOR, ".cl-alert-danger, [data-testid*='error-message']")
+                if error_msg_element.is_displayed():
+                    error_text = error_msg_element.text.strip()
+                    # 尝试关闭错误提示（可选，不影响逻辑）
                     try:
                         close_btn = self.driver.find_element(By.CSS_SELECTOR, "button[aria-label='Close']")
                         self.driver.execute_script("arguments[0].click();", close_btn)
                     except:
                         pass
-                    raise Exception(f"❌ 登录失败: {error_msg.text}")
-            except:
+                    # 如果找到了错误信息，则明确抛出登录失败
+                    raise Exception(f"❌ 登录失败: 页面显示错误信息: {error_text}")
+            except NoSuchElementException:
                 pass
-            raise Exception("⚠️ 登录超时，无法确认登录状态，可能发生重定向失败或网络问题。")
+            
+            # 如果没有找到明确的错误信息，则抛出通用超时错误
+            raise Exception("⚠️ 登录超时，无法确认登录状态。可能是网络延迟、重定向失败或登录失败但无明确提示。")
+
     
     def get_server_url(self):
         """在 HOME 页面查找并点击服务器链接，获取服务器 URL"""
