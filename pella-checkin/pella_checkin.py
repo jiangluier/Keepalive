@@ -34,8 +34,8 @@ class PellaAutoRenew:
     # 配置class类常量
     LOGIN_URL = "https://www.pella.app/login"
     HOME_URL = "https://www.pella.app/home" # 登录后跳转的首页
-    RENEW_WAIT_TIME = 8  # 点击续期链接后在新页面等待的秒数 (略微增加等待时间以确保请求完成)
-    WAIT_TIME_AFTER_LOGIN = 15  # 登录后等待跳转到HOME页面的秒数
+    RENEW_WAIT_TIME = 8 # 点击续期链接后在新页面等待的秒数 (略微增加等待时间以确保请求完成)
+    WAIT_TIME_AFTER_LOGIN = 15 # 登录后等待跳转到HOME页面的秒数
 
     def __init__(self, email, password):
         self.email = email
@@ -145,7 +145,7 @@ class PellaAutoRenew:
             self.driver.execute_script("arguments[0].click();", continue_btn_1)
             logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
             
-            # 3. 等待密码输入框出现 (解决上一次的超时问题)
+            # 3. 等待密码输入框出现
             logger.info("⏳ 等待密码输入框出现...")
             password_input = self.wait_for_element_clickable(By.ID, "password-field", 15)
             logger.info("✅ 密码输入框已出现")
@@ -218,7 +218,6 @@ class PellaAutoRenew:
             )
             
             # 获取链接并点击
-            # server_url = server_link_element.get_attribute('href') # 实际不需要先获取，直接点击
             server_link_element.click()
             
             # 等待页面跳转完成 (URL 包含 /server/ 即可)
@@ -238,7 +237,7 @@ class PellaAutoRenew:
             raise Exception(f"❌ 点击服务器链接时出现意外错误: {e}")
     
     def renew_server(self):
-        """执行续期流程 - 仅在 self.server_url 已设置时运行"""
+        """执行续期流程 - 仅在 self.server_url 已设置时运行 (已优化为 While 循环)"""
         if not self.server_url:
             raise Exception("❌ 缺少服务器 URL，无法执行续期")
             
@@ -254,19 +253,56 @@ class PellaAutoRenew:
         if self.initial_expiry_value == -1.0:
             raise Exception("❌ 无法提取初始过期时间，可能页面加载失败或元素变化")
 
-        # 2. 查找并点击所有续期按钮
+        # 2. 查找并点击所有续期按钮 (使用 While 循环确保处理所有可点击链接)
         try:
             # 查找所有带有 href 且没有被禁用的链接
-            # 优化：使用显式等待确保元素出现
             renew_link_selectors = "a[href*='/renew/']:not(.opacity-50):not(.pointer-events-none)"
+            renewed_count = 0
+            original_window = self.driver.current_window_handle
             
-            WebDriverWait(self.driver, 10).until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, renew_link_selectors))
-            )
-            
-            renew_buttons = self.driver.find_elements(By.CSS_SELECTOR, renew_link_selectors)
-            
-            if not renew_buttons:
+            while True:
+                # 必须在每次循环中重新查找所有元素，以应对页面状态变化
+                renew_buttons = self.driver.find_elements(By.CSS_SELECTOR, renew_link_selectors)
+                
+                if not renew_buttons:
+                    break # 跳出循环，没有可点击的按钮了
+
+                # 总是点击找到的第一个可点击按钮 (因为 re-find 确保了它处于最新状态)
+                button = renew_buttons[0]
+                renew_url = button.get_attribute('href')
+                
+                logger.info(f"🚀 开始处理第 {renewed_count + 1} 个续期链接: {renew_url}")
+                
+                # 在新标签页中打开链接，避免主页面状态被破坏
+                self.driver.execute_script("window.open(arguments[0]);", renew_url)
+                time.sleep(1) # 切换窗口前的缓冲
+
+                # 切换到新的标签页
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+
+                # 尝试等待新页面的某个元素或 URL 稳定
+                try:
+                    # 等待 URL 至少包含 'renew' 字样 (基础稳定性)
+                    WebDriverWait(self.driver, 5).until(EC.url_contains("/renew/"))
+                except:
+                    logger.warning("⚠️ 续期页面 URL 未在预期内加载，继续固定等待。")
+
+                logger.info(f"⏳ 在续期页面等待 {self.RENEW_WAIT_TIME} 秒...")
+                time.sleep(self.RENEW_WAIT_TIME)
+
+                # 关闭新标签页并切回主页面
+                self.driver.close()
+                self.driver.switch_to.window(original_window)
+                logger.info(f"✅ 第 {renewed_count + 1} 个续期链接处理完成")
+                renewed_count += 1
+                
+                # 每次点击后，必须刷新主服务器页面，确保下次循环能获取最新的可点击按钮列表
+                self.driver.get(self.server_url)
+                time.sleep(3) # 允许刷新和元素重新加载
+
+        
+            # 检查是否因为未找到按钮而结束
+            if renewed_count == 0:
                 # 检查是否有禁用的按钮存在，以确认是否真的已续期
                 disabled_renew_selectors = "a[href*='/renew/'].opacity-50, a[href*='/renew/'].pointer-events-none"
                 disabled_buttons = self.driver.find_elements(By.CSS_SELECTOR, disabled_renew_selectors)
@@ -276,40 +312,6 @@ class PellaAutoRenew:
                 else:
                     return "⏳ 未找到任何续期按钮 (无论是可点击还是禁用)，脚本无法判断状态。"
 
-
-            logger.info(f"👉 找到 {len(renew_buttons)} 个可点击的续期链接")
-            
-            renewed_count = 0
-            original_window = self.driver.current_window_handle
-            
-            for i, button in enumerate(renew_buttons, 1):
-                renew_url = button.get_attribute('href')
-                logger.info(f"🚀 开始处理第 {i} 个续期链接: {renew_url}")
-                
-                # 在新标签页中打开链接，避免主页面状态被破坏
-                self.driver.execute_script("window.open(arguments[0]);", renew_url)
-                time.sleep(1) # 切换窗口前的缓冲
-                
-                # 切换到新的标签页
-                self.driver.switch_to.window(self.driver.window_handles[-1])
-                
-                # 优化: 尝试等待新页面的某个元素或 URL 稳定
-                try:
-                    # 等待 URL 至少包含 'renew' 字样 (基础稳定性)
-                    WebDriverWait(self.driver, 5).until(EC.url_contains("/renew/"))
-                except:
-                    logger.warning("⚠️ 续期页面 URL 未在预期内加载，继续固定等待。")
-                    
-                logger.info(f"⏳ 在续期页面等待 {self.RENEW_WAIT_TIME} 秒...")
-                time.sleep(self.RENEW_WAIT_TIME)
-                
-                # 关闭新标签页并切回主页面
-                self.driver.close()
-                self.driver.switch_to.window(original_window)
-                logger.info(f"✅ 第 {i} 个续期链接处理完成")
-                renewed_count += 1
-                time.sleep(5) # 间隔5秒
-            
             # 3. 重新加载服务器页面并获取新的过期时间
             if renewed_count > 0:
                 logger.info("🔄 重新加载服务器页面以检查续期结果...")
@@ -338,6 +340,7 @@ class PellaAutoRenew:
                 else:
                     return f"❌ 续期操作完成，但天数不升反降! 初始 {self.initial_expiry_details} -> 最终 {final_expiry_details}"
             else:
+                # 这种情况理论上会被 while 循环前的检查捕获
                 return "⏳ 未执行续期操作，因为没有找到可点击的续期链接。"
 
         except TimeoutException:
