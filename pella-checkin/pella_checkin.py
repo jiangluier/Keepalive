@@ -176,25 +176,25 @@ class PellaAutoRenew:
             raise Exception(f"❌ 登录流程失败 (步骤 2/3): {e}")
 
         # 5. 点击 Continue 按钮提交登录
-        try:
-            # 【关键修改】在点击前增加一个短暂等待，确保 JS 验证完成，按钮状态更新
-            logger.info("⏳ 等待 2 秒，确保最终登录按钮被激活...")
-            time.sleep(2) 
-
-            logger.info("🔍 查找 Continue 登录按钮...")
-            # 使用 presence_of_element_located 确保元素存在，如果超时，说明元素根本没出现
-            login_btn = self.wait_for_element_present(By.XPATH, "//button[contains(., 'Continue')]", 10)
-            
-            # 使用 JS 强制点击，绕过可能存在的元素不可交互问题
-            self.driver.execute_script("arguments[0].click();", login_btn)
-            logger.info("✅ (JS 强制) 已点击 Continue 按钮")
-            
-        except TimeoutException as te:
-            raise Exception(f"❌ 查找最终 Continue 按钮超时 (10s): {te}")
-        except Exception as e:
-            # 如果强制点击仍然失败，则抛出更详细的错误
-            raise Exception(f"❌ 点击最终 Continue 按钮失败 (可能元素仍不可交互或未找到): {e}")
+                try:
+                    # 在点击前增加一个短暂等待，确保 JS 验证完成，按钮状态更新
+                    logger.info("⏳ 等待 2 秒，确保最终登录按钮被激活...")
+                    time.sleep(2) 
         
+                    logger.info("🔍 查找 Continue 登录按钮...")
+                    # 【关键修改】延长 wait_for_element_present 的超时时间到 15 秒
+                    login_btn = self.wait_for_element_present(By.XPATH, "//button[contains(., 'Continue')]", 15)
+                    
+                    # 使用 JS 强制点击
+                    self.driver.execute_script("arguments[0].click();", login_btn)
+                    logger.info("✅ (JS 强制) 已点击 Continue 按钮")
+                    
+                except TimeoutException as te:
+                    # 捕获超时错误并给出更明确的提示
+                    raise Exception(f"❌ 查找最终 Continue 按钮超时 (15s)。可能按钮加载时间过长或页面未成功切换。: {te}")
+                except Exception as e:
+                    raise Exception(f"❌ 点击最终 Continue 按钮失败: {e}")
+            
         # 6. 等待登录完成并跳转到 HOME 页面
         try:
             WebDriverWait(self.driver, self.WAIT_TIME_AFTER_LOGIN).until(
