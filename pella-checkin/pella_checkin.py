@@ -126,33 +126,43 @@ class PellaAutoRenew:
             email_input.clear()
             email_input.send_keys(self.email)
             logger.info("✅ 邮箱输入完成")
-            time.sleep(1)
         except Exception as e:
             raise Exception(f"❌ 输入邮箱时出错: {e}")
-        
-        # 2. 输入密码
+            
+        # 2. 点击 Continue (Identifier 提交)
+        try:
+            logger.info("🔍 查找并点击 Continue 按钮 (进入密码输入阶段)...")
+            continue_btn_1 = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 5)
+            self.driver.execute_script("arguments[0].click();", continue_btn_1)
+            logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
+        except Exception as e:
+             # 如果这里失败，可能是因为输入邮箱后自动提交了，或者页面结构变了。
+             logger.warning(f"⚠️ 无法找到或点击第一个 Continue 按钮，继续尝试查找密码框: {e}")
+
+        # 3. 输入密码
         try:
             logger.info("🔍 查找密码输入框...")
+            # 等待密码输入框出现
             password_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='password']", 10)
             password_input.clear()
             password_input.send_keys(self.password)
             logger.info("✅ 密码输入完成")
-            time.sleep(1)
         except TimeoutException:
-            raise Exception("❌ 找不到密码输入框")
+            raise Exception("❌ 找不到密码输入框。请检查登录流程是否需要两次点击 'Continue'")
         
-        # 3. 点击 Continue 按钮
+        # 4. 点击 Continue 按钮 (最终登录提交)
         try:
-            logger.info("🔍 查找 Continue 登录按钮...")
+            logger.info("🔍 查找最终 Continue 登录按钮...")
+            # 这是最终的登录提交按钮
             login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             
             self.driver.execute_script("arguments[0].click();", login_btn)
-            logger.info("✅ 已点击 Continue 登录按钮")
+            logger.info("✅ 已点击最终 Continue 登录按钮")
             
         except Exception as e:
-            raise Exception(f"❌ 点击 Continue 按钮失败: {e}")
+            raise Exception(f"❌ 点击最终 Continue 按钮失败: {e}")
         
-        # 4. 等待登录完成并跳转到 HOME 页面
+        # 5. 等待登录完成并跳转到 HOME 页面
         try:
             WebDriverWait(self.driver, self.WAIT_TIME_AFTER_LOGIN).until(
                 EC.url_to_be(self.HOME_URL) # 确认跳转到 home 页面
