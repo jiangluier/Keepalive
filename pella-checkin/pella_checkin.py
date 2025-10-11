@@ -1,38 +1,41 @@
 #!/usr/bin/env python3
 """
-Leaflow 多账号自动签到脚本
+Pella 多账号自动续期脚本
 支持冒号分隔多账号和单账号配置
 """
 
 import os
 import time
 import logging
+import re
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import requests
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class LeaflowAutoCheckin:
+class PellaAutoRenew:
     # 配置class类常量
-    LOGIN_URL = "https://leaflow.net/login"
-    CHECKIN_URL = "https://checkin.leaflow.net"
+    LOGIN_URL = "https://www.pella.app/login"
+    # 登录后会跳转到类似 https://www.pella.app/server/SERVER_ID 的页面
+    RENEW_WAIT_TIME = 10  # 点击续期链接后在新页面等待的秒数
     WAIT_TIME_AFTER_LOGIN = 20  # 登录后等待的秒数
-    WAIT_TIME_AFTER_CHECKIN_CLICK = 5  # 点击签到后等待的秒数
-    RETRY_WAIT_TIME_PAGE_LOAD = 20 # 签到页面加载每次重试等待时间
-    RETRY_COUNT_PAGE_LOAD = 3 # 签到页面加载重试次数
+    RETRY_WAIT_TIME_PAGE_LOAD = 15 # 页面加载每次重试等待时间
+    RETRY_COUNT_PAGE_LOAD = 3 # 页面加载重试次数
 
     def __init__(self, email, password):
         self.email = email
         self.password = password
         self.telegram_bot_token = os.getenv('TG_BOT_TOKEN', '')
         self.telegram_chat_id = os.getenv('TG_CHAT_ID', '')
+        self.initial_expiry_days = -1
+        self.server_url = None
         
         if not self.email or not self.password:
             raise ValueError("邮箱和密码不能为空")
@@ -60,29 +63,6 @@ class LeaflowAutoCheckin:
         self.driver = webdriver.Chrome(options=chrome_options)
         self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
-    def close_popup(self):
-        """关闭初始弹窗 - 通过点击外部区域"""
-        try:
-            logger.info("👉 尝试关闭初始弹窗...")
-            time.sleep(3)  # 等待弹窗加载
-            
-            # 尝试点击页面左上角空白处关闭弹窗
-            try:
-                actions = ActionChains(self.driver)
-                # 点击页面左上角(10,10)位置
-                actions.move_by_offset(10, 10).click().perform()
-                logger.info("✅ 关闭弹窗成功")
-                time.sleep(2)
-                return True
-            except:
-                pass
-
-            return False
-            
-        except Exception as e:
-            logger.warning(f"❌ 关闭弹窗时出错: {e}")
-            return False
-    
     def wait_for_element_clickable(self, by, value, timeout=10):
         """等待元素可点击"""
         return WebDriverWait(self.driver, timeout).until(
@@ -94,282 +74,170 @@ class LeaflowAutoCheckin:
         return WebDriverWait(self.driver, timeout).until(
             EC.presence_of_element_located((by, value))
         )
-    
+
+    def extract_expiry_days(self, page_source):
+        """从页面源码中提取过期天数"""
+        # 正则表达式匹配 Your server expires in X.
+        match = re.search(r"Your server expires in (\d+D)", page_source)
+        if match:
+            days_str = match.group(1).replace('D', '')
+            return int(days_str)
+        return -1 # 未找到或格式不匹配
+
     def login(self):
         """执行登录流程"""
         logger.info(f"🔑 开始登录流程")
         
-        # 访问登录页面
         self.driver.get(self.LOGIN_URL)
-        time.sleep(5)  # 增加初始等待时间
+        time.sleep(3)
         
-        # 关闭弹窗
-        self.close_popup()
-        
-        # 输入邮箱
+        # 1. 输入邮箱
         try:
             logger.info("🔍 查找邮箱输入框...")
-            time.sleep(2)
-            
-            # 尝试多种选择器找到邮箱输入框
-            email_selectors = [
-                "input[type='text']",
-                "input[type='email']", 
-                "input[placeholder*='邮箱']",
-                "input[placeholder*='邮件']",
-                "input[placeholder*='email']",
-                "input[name='email']",
-                "input[name='username']"
-            ]
-            
-            email_input = None
-            for selector in email_selectors:
-                try:
-                    email_input = self.wait_for_element_clickable(By.CSS_SELECTOR, selector, 5)
-                    logger.info(f"✅ 找到邮箱输入框")
-                    break
-                except:
-                    continue
-            
-            if not email_input:
-                raise Exception("❌ 找不到邮箱输入框")
-            
-            # 清除并输入邮箱
+            # Pella 邮箱输入框 selector: input[name='identifier'] 或 input[type='text'][placeholder*='email']
+            email_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='identifier']", 10)
             email_input.clear()
             email_input.send_keys(self.email)
             logger.info("✅ 邮箱输入完成")
-            time.sleep(2)
-            
+            time.sleep(1)
         except Exception as e:
-            logger.error(f"❌ 输入邮箱时出错: {e}")
-            # 尝试使用JavaScript直接设置值
-            try:
-                self.driver.execute_script(f"document.querySelector('input[type=\"text\"], input[type=\"email\"]').value = '{self.email}';")
-                logger.info("👉 通过JavaScript设置邮箱")
-                time.sleep(2)
-            except:
-                raise Exception(f"❌ 无法输入邮箱: {e}")
+            raise Exception(f"❌ 输入邮箱时出错: {e}")
         
-        # 等待密码输入框出现并输入密码
+        # 2. 输入密码
         try:
             logger.info("🔍 查找密码输入框...")
-
-            password_input = self.wait_for_element_clickable(
-                By.CSS_SELECTOR, "input[type='password']", 10
-            )
-            
+            # Pella 密码输入框 selector: input[name='password'] 或 input[type='password'][placeholder*='password']
+            password_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='password']", 10)
             password_input.clear()
             password_input.send_keys(self.password)
             logger.info("✅ 密码输入完成")
             time.sleep(1)
-            
         except TimeoutException:
             raise Exception("❌ 找不到密码输入框")
         
-        # 点击登录按钮
+        # 3. 点击 Continue 按钮
         try:
-            logger.info("🔍 查找登录按钮...")
-            login_btn_selectors = [
-                "//button[contains(text(), '登录')]",
-                "//button[contains(text(), 'Login')]",
-                "//button[@type='submit']",
-                "//input[@type='submit']",
-                "button[type='submit']"
-            ]
+            logger.info("🔍 查找 Continue 登录按钮...")
+            # Pella 登录按钮 selector: button:has(span:contains('Continue')) 或 .cl-formButtonPrimary
+            # 尝试使用 XPATH
+            login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             
-            login_btn = None
-            for selector in login_btn_selectors:
-                try:
-                    if selector.startswith("//"):
-                        login_btn = self.wait_for_element_clickable(By.XPATH, selector, 5)
-                    else:
-                        login_btn = self.wait_for_element_clickable(By.CSS_SELECTOR, selector, 5)
-                    logger.info(f"✅ 找到登录按钮")
-                    break
-                except:
-                    continue
-            
-            if not login_btn:
-                raise Exception("❌ 找不到登录按钮")
-            
-            login_btn.click()
-            logger.info("✅ 已点击登录按钮")
+            # 使用 JavaScript 点击，避免被 Captcha 覆盖导致点击无效
+            self.driver.execute_script("arguments[0].click();", login_btn)
+            logger.info("✅ 已点击 Continue 登录按钮")
             
         except Exception as e:
-            raise Exception(f"❌ 点击登录按钮失败: {e}")
+            raise Exception(f"❌ 点击 Continue 按钮失败: {e}")
         
-        # 等待登录完成
+        # 4. 等待登录完成并获取服务器页面 URL
         try:
             WebDriverWait(self.driver, self.WAIT_TIME_AFTER_LOGIN).until(
-                lambda driver: "dashboard" in driver.current_url or "workspaces" in driver.current_url or "login" not in driver.current_url
+                lambda driver: "/server/" in driver.current_url
             )
             
-            # 检查当前URL确认登录成功
             current_url = self.driver.current_url
-            if "dashboard" in current_url or "workspaces" in current_url or "login" not in current_url:
-                logger.info(f"✅ 登录成功，当前URL: {current_url}")
+            if "/server/" in current_url:
+                self.server_url = current_url
+                logger.info(f"✅ 登录成功，当前服务器URL: {self.server_url}")
                 return True
             else:
-                raise Exception("⚠️ 登录后未跳转到正确页面")
+                raise Exception("⚠️ 登录后未跳转到服务器页面")
                 
         except TimeoutException:
-            # 检查是否登录失败
+            # 检查是否有错误消息，Pella 可能会在页面上显示错误
             try:
-                error_selectors = [".error", ".alert-danger", "[class*='error']", "[class*='danger']"]
-                for selector in error_selectors:
-                    try:
-                        error_msg = self.driver.find_element(By.CSS_SELECTOR, selector)
-                        if error_msg.is_displayed():
-                            raise Exception(f"❌ 登录失败: {error_msg.text}")
-                    except:
-                        continue
-                raise Exception("⚠️ 登录超时，无法确认登录状态")
-            except Exception as e:
-                raise e
-    
-    def wait_for_checkin_page_loaded(self, max_retries=None, wait_time=None):
-        """等待签到页面完全加载，支持重试"""
-        
-        # 使用类常量作为默认值
-        max_retries = max_retries if max_retries is not None else self.RETRY_COUNT_PAGE_LOAD
-        wait_time = wait_time if wait_time is not None else self.RETRY_WAIT_TIME_PAGE_LOAD
-        
-        for attempt in range(max_retries):
-            logger.info(f"⏳ 等待签到页面加载，尝试 {attempt + 1}/{max_retries}，等待 {wait_time} 秒...")
-            time.sleep(wait_time)
-            
-            try:
-                # 检查页面是否包含签到相关元素
-                checkin_indicators = [
-                    "button.checkin-btn",  # 优先使用这个选择器
-                    "//button[contains(text(), '立即签到')]",
-                    "//*[contains(text(), '每日签到')]",
-                    "//*[contains(text(), '签到')]"
-                ]
-                
-                for indicator in checkin_indicators:
-                    try:
-                        if indicator.startswith("//"):
-                            element = WebDriverWait(self.driver, 10).until(
-                                EC.presence_of_element_located((By.XPATH, indicator))
-                            )
-                        else:
-                            element = WebDriverWait(self.driver, 10).until(
-                                EC.presence_of_element_located((By.CSS_SELECTOR, indicator))
-                            )
-                        
-                        if element.is_displayed():
-                            logger.info(f"✅ 找到签到页面元素")
-                            return True
-                    except:
-                        continue
-                
-                logger.warning(f"⏳ 第 {attempt + 1} 次尝试未找到签到按钮，继续等待...")
-                
-            except Exception as e:
-                logger.warning(f"❌ 第 {attempt + 1} 次检查签到页面时出错: {e}")
-        
-        return False
-    
-    def find_and_click_checkin_button(self):
-        """查找并点击签到按钮 - 使用和单账号成功时相同的逻辑"""
-        logger.info("🔍 查找立即签到按钮...")
-        
+                error_msg = self.driver.find_element(By.CSS_SELECTOR, ".cl-auth-form-error-message, .cl-alert-danger")
+                if error_msg.is_displayed():
+                    raise Exception(f"❌ 登录失败: {error_msg.text}")
+            except:
+                pass
+            raise Exception("⚠️ 登录超时，无法确认登录状态")
+
+    def renew_server(self):
+        """执行续期流程"""
+        logger.info(f"👉 跳转到服务器页面: {self.server_url}")
+        self.driver.get(self.server_url)
+        time.sleep(5) # 基础等待
+
+        # 1. 提取初始过期时间
+        page_source = self.driver.page_source
+        self.initial_expiry_days = self.extract_expiry_days(page_source)
+        logger.info(f"ℹ️ 初始服务器过期时间: {self.initial_expiry_days} 天")
+
+        if self.initial_expiry_days == -1:
+             raise Exception("❌ 无法提取初始过期时间，可能页面加载失败或元素变化")
+
+        # 2. 查找并点击所有续期按钮
         try:
-            time.sleep(5)
-            checkin_btn = self.wait_for_element_present(By.CSS_SELECTOR, "button.checkin-btn", 10)
+            # 查找所有带有 href 且文本为 "Claim" 的 a 标签
+            # 或者更精确地，查找 class 包含 rounded-md 的 a 标签，并排除 class 包含 pointer-events-none 的
+            renew_link_selectors = "a.rounded-md:not(.pointer-events-none)"
+            
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, renew_link_selectors))
+            )
+            
+            renew_buttons = self.driver.find_elements(By.CSS_SELECTOR, renew_link_selectors)
+            
+            if not renew_buttons:
+                # 再次尝试更通用的链接，查找 href 包含 /renew/ 的链接
+                renew_buttons = self.driver.find_elements(By.CSS_SELECTOR, "a[href*='/renew/']")
+                # 筛选掉已经 Claimed 的（即 class 中有 opacity-50 或 pointer-events-none 的）
+                renew_buttons = [btn for btn in renew_buttons if 'opacity-50' not in btn.get_attribute('class') and 'pointer-events-none' not in btn.get_attribute('class')]
 
-            # 判断是否已经签到
-            if not checkin_btn.is_enabled() and ("已签到" in checkin_btn.text or "disabled" in checkin_btn.get_attribute("class")):
-                logger.info("👉 签到按钮显示为 '已签到' 且不可点击。")
-                return "ALREADY_CHECKED_IN" # 返回已签到标记
+            if not renew_buttons:
+                 return "⏳ 未找到可点击的续期按钮，可能今日已续期。"
 
-            # 尝试点击签到按钮
-            if checkin_btn.is_displayed() and checkin_btn.is_enabled():
-                logger.info("👉 找到并点击 '立即签到' 按钮")
-                checkin_btn.click()
-                return "CLICK_SUCCESS" # 返回成功点击标记
+            logger.info(f"👉 找到 {len(renew_buttons)} 个可点击的续期链接")
+            
+            renewed_count = 0
+            original_window = self.driver.current_window_handle
+            
+            for i, button in enumerate(renew_buttons, 1):
+                renew_url = button.get_attribute('href')
+                logger.info(f"🚀 开始处理第 {i} 个续期链接: {renew_url}")
+                
+                # 在新标签页中打开链接
+                self.driver.execute_script("window.open(arguments[0]);", renew_url)
+                time.sleep(1)
+                
+                # 切换到新的标签页
+                self.driver.switch_to.window(self.driver.window_handles[-1])
+                logger.info(f"⏳ 在续期页面等待 {self.RENEW_WAIT_TIME} 秒...")
+                time.sleep(self.RENEW_WAIT_TIME)
+                
+                # 关闭新标签页并切回主页面
+                self.driver.close()
+                self.driver.switch_to.window(original_window)
+                logger.info(f"✅ 第 {i} 个续期链接处理完成")
+                renewed_count += 1
+                time.sleep(2) # 间隔一下
 
-            logger.error("⚠️ 找不到可点击的签到按钮")
-            return "NO_BUTTON_FOUND" # 返回不可点击标记
+            # 3. 重新加载服务器页面并获取新的过期时间
+            if renewed_count > 0:
+                logger.info("🔄 重新加载服务器页面以检查续期结果...")
+                self.driver.get(self.server_url)
+                time.sleep(5)
+                
+                final_expiry_days = self.extract_expiry_days(self.driver.page_source)
+                logger.info(f"ℹ️ 最终服务器过期时间: {final_expiry_days} 天")
+                
+                if final_expiry_days > self.initial_expiry_days:
+                    return f"✅ 续期成功! 初始 {self.initial_expiry_days} 天 -> 最终 {final_expiry_days} 天 (共续期 {final_expiry_days - self.initial_expiry_days} 天)"
+                elif final_expiry_days == self.initial_expiry_days:
+                    return f"⚠️ 续期操作完成，但天数未增加 ({final_expiry_days} 天)。可能续期未生效或当天无额外时间。"
+                else:
+                    return f"❌ 续期操作完成，但天数不升反降! 初始 {self.initial_expiry_days} 天 -> 最终 {final_expiry_days} 天"
+            else:
+                 return "⏳ 未执行续期操作，因为没有找到可点击的续期链接。"
 
         except TimeoutException:
-            logger.error("⚠️ 在规定时间内找不到签到按钮")
-            return "NO_BUTTON_FOUND" # 返回未找到签到按钮标记
+            raise Exception("❌ 页面元素加载超时")
+        except NoSuchElementException as e:
+             raise Exception(f"❌ 续期元素查找失败: {e}")
         except Exception as e:
-            logger.error(f"❌ 点击签到按钮时出错: {e}")
-            return "ERROR"  # 返回错误标记
-              
-    def checkin(self):
-        """执行签到流程"""
-        logger.info("👉 跳转到签到页面...")
-        self.driver.get(self.CHECKIN_URL)
-        
-        # 等待签到页面加载（最多重试3次，每次等待20秒）
-        if not self.wait_for_checkin_page_loaded():
-            raise Exception("❌ 签到页面加载失败，无法找到相关元素")
-        
-        # 查找并点击立即签到按钮
-        click_result = self.find_and_click_checkin_button()
-        
-        if click_result == "ALREADY_CHECKED_IN":
-            return "⏳ 今日已签到，请明日再来"
-        if click_result != "CLICK_SUCCESS":
-            raise Exception("⚠️ 找不到立即签到按钮或按钮不可点击")
-        
-        logger.info("👉 已点击立即签到按钮")
-        time.sleep(self.WAIT_TIME_AFTER_CHECKIN_CLICK)
-        
-        # 获取签到结果
-        result_message = self.get_checkin_result()
-        return result_message
-    
-    def get_checkin_result(self):
-        """获取签到结果消息"""
-        try:
-            time.sleep(3)
+            raise Exception(f"❌ 续期流程中出现意外错误: {e}")
             
-            # 尝试查找各种可能的成功消息元素
-            success_selectors = [
-                ".alert-success",
-                ".success",
-                ".message",
-                "[class*='success']",
-                "[class*='message']",
-                ".modal-content",  # 弹窗内容
-                ".ant-message",    # Ant Design 消息
-                ".el-message",     # Element UI 消息
-                ".toast",          # Toast消息
-                ".notification"    # 通知
-            ]
-            
-            for selector in success_selectors:
-                try:
-                    element = self.driver.find_element(By.CSS_SELECTOR, selector)
-                    if element.is_displayed():
-                        text = element.text.strip()
-                        if text:
-                            return text
-                except:
-                    continue
-            
-            # 如果没有找到特定元素，检查页面文本
-            page_text = self.driver.find_element(By.TAG_NAME, "body").text
-            important_keywords = ["成功", "签到", "获得", "恭喜", "谢谢", "感谢", "完成", "已签到", "连续签到"]
-            
-            for keyword in important_keywords:
-                if keyword in page_text:
-                    # 提取包含关键词的行
-                    lines = page_text.split('\n')
-                    for line in lines:
-                        if keyword in line and len(line.strip()) < 100:  # 避免提取过长的文本
-                            return line.strip()
-            
-            return "⚠️ 签到完成，但未找到具体结果消息"
-            
-        except Exception as e:
-            return f"❌ 获取签到结果时出错: {str(e)}"
-    
     def run(self):
         """单个账号执行流程"""
         try:
@@ -377,15 +245,15 @@ class LeaflowAutoCheckin:
             
             # 登录
             if self.login():
-                # 签到
-                result = self.checkin()
-                logger.info(f"📋 签到结果: {result}")
+                # 续期
+                result = self.renew_server()
+                logger.info(f"📋 续期结果: {result}")
                 return True, result
             else:
                 raise Exception("❌ 登录失败")
                 
         except Exception as e:
-            error_msg = f"❌ 自动签到失败: {str(e)}"
+            error_msg = f"❌ 自动续期失败: {str(e)}"
             logger.error(error_msg)
             return False, error_msg
         
@@ -402,17 +270,19 @@ class MultiAccountManager:
         self.accounts = self.load_accounts()
     
     def load_accounts(self):
+        # 保持与 Leaflow 脚本兼容的加载逻辑，但使用 Pella 的环境变量名
         accounts = []
         logger.info("⏳ 开始加载账号配置...")
         
-        # 方法1: 冒号分隔多账号格式
-        accounts_str = os.getenv('LEAFLOW_ACCOUNTS', '').strip()
+        # 方法1: 冒号分隔多账号格式 (使用 PELLA_ACCOUNTS 变量)
+        accounts_str = os.getenv('PELLA_ACCOUNTS', os.getenv('LEAFLOW_ACCOUNTS', '')).strip()
         if accounts_str:
             try:
                 logger.info("⏳ 尝试解析冒号分隔多账号配置")
-                account_pairs = [pair.strip() for pair in accounts_str.split(',')]
+                # 兼容逗号、分号分隔
+                account_pairs = [pair.strip() for pair in re.split(r'[;,]', accounts_str)] 
                 
-                logger.info(f"👉 找到 {len(account_pairs)} 个账号")
+                logger.info(f"👉 找到 {len(account_pairs)} 个账号对")
                 
                 for i, pair in enumerate(account_pairs):
                     if ':' in pair:
@@ -427,21 +297,21 @@ class MultiAccountManager:
                             })
                             logger.info(f"✅ 成功添加第 {i+1} 个账号")
                         else:
-                            logger.warning(f"❌ 账号对格式错误")
+                            logger.warning(f"❌ 账号对格式错误或内容为空")
                     else:
-                        logger.warning(f"❌ 账号对缺少冒号分隔符")
+                        logger.warning(f"❌ 账号对缺少分隔符: {pair}")
                 
                 if accounts:
-                    logger.info(f"👉 从冒号分隔格式成功加载了 {len(accounts)} 个账号")
+                    logger.info(f"👉 从多账号格式成功加载了 {len(accounts)} 个账号")
                     return accounts
                 else:
-                    logger.warning("⚠️ 冒号分隔配置中没有找到有效的账号信息")
+                    logger.warning("⚠️ 多账号配置中没有找到有效的账号信息")
             except Exception as e:
-                logger.error(f"❌ 解析冒号分隔账号配置失败: {e}")
+                logger.error(f"❌ 解析多账号配置失败: {e}")
         
-        # 方法2: 单账号格式
-        single_email = os.getenv('LEAFLOW_EMAIL', '').strip()
-        single_password = os.getenv('LEAFLOW_PASSWORD', '').strip()
+        # 方法2: 单账号格式 (使用 PELLA_EMAIL 和 PELLA_PASSWORD 变量)
+        single_email = os.getenv('PELLA_EMAIL', os.getenv('LEAFLOW_EMAIL', '')).strip()
+        single_password = os.getenv('PELLA_PASSWORD', os.getenv('LEAFLOW_PASSWORD', '')).strip()
         
         if single_email and single_password:
             accounts.append({
@@ -454,8 +324,8 @@ class MultiAccountManager:
         # 如果所有方法都失败
         logger.error("⚠️ 未找到有效的账号配置")
         logger.error("⚠️ 请检查以下环境变量设置:")
-        logger.error("⚠️ 1. LEAFLOW_ACCOUNTS: 冒号分隔多账号 (email1:pass1,email2:pass2)")
-        logger.error("⚠️ 2. LEAFLOW_EMAIL 和 LEAFLOW_PASSWORD: 单账号")
+        logger.error("⚠️ 1. PELLA_ACCOUNTS: 冒号分隔多账号 (email1:pass1,email2:pass2) 或使用 LEAFLOW_ACCOUNTS")
+        logger.error("⚠️ 2. PELLA_EMAIL 和 PELLA_PASSWORD: 单账号 或使用 LEAFLOW_EMAIL/LEAFLOW_PASSWORD")
         
         raise ValueError("⚠️ 未找到有效的账号配置")
     
@@ -466,36 +336,31 @@ class MultiAccountManager:
             return
         
         try:
-            SUCCESS_MSG = "⏳ 今日已手动签到"
-            # 脚本本次签到的账号
-            script_success_count = sum(1 for _, success, result in results if success and result != SUCCESS_MSG)
-            # 本次操作前已签到的账号
-            already_checked_count = sum(1 for _, _, result in results if result == SUCCESS_MSG)
-            # 失败的账号
+            # 统计结果
+            success_count = sum(1 for _, success, result in results if success and "续期成功" in result)
+            already_done_count = sum(1 for _, success, result in results if success and "未找到可点击" in result)
             failure_count = sum(1 for _, success, _ in results if not success)
-            # 处理的账号总数
             total_count = len(results)
-            # 已成功签到的账号总数
-            total_success_count = already_checked_count + script_success_count
 
-            message = f"🎁 Leaflow自动签到通知\n\n"
+            message = f"🎁 Pella自动续期通知\n\n"
             message += f"📋 共处理账号: {total_count} 个，其中：\n"
-            message += f"📊 手动签到: {already_checked_count} 个\n"
-            message += f"📊 脚本签到: {script_success_count} 个\n"
-            message += f"📊 签到成功: {total_success_count} 个\n"
-            message += f"❌ 签到失败: {failure_count} 个\n\n"
-         
+            message += f"📊 续期成功: {success_count} 个\n"
+            message += f"📊 今日已续期: {already_done_count} 个\n"
+            message += f"❌ 续期失败: {failure_count} 个\n\n"
+            
             for email, success, result in results:
-                if success and result != SUCCESS_MSG:
-                    status = "✅" # 脚本签到
-                elif result == SUCCESS_MSG:
-                    status = "⏳" # 手动签到
+                if success and "续期成功" in result:
+                    status = "✅" # 续期成功
+                elif "未找到可点击" in result:
+                    status = "⏳" # 已续期
                 else:
                     status = "❌" # 失败
                 
                 # 隐藏邮箱部分字符以保护隐私
                 masked_email = email[:3] + "***" + email[email.find("@"):]
-                message += f"{status} {masked_email}: {result}\n"
+                # 限制结果长度
+                short_result = result.split('\n')[0][:100] + ('...' if len(result.split('\n')[0]) > 100 else '')
+                message += f"{status} {masked_email}: {short_result}\n"
             
             url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
             data = {
@@ -514,17 +379,18 @@ class MultiAccountManager:
             logger.error(f"❌ Telegram 通知发送出错: {e}")
     
     def run_all(self):
-        """运行所有账号的签到流程"""
-        logger.info(f"👉 开始执行 {len(self.accounts)} 个账号的签到任务")
+        """运行所有账号的续期流程"""
+        logger.info(f"👉 开始执行 {len(self.accounts)} 个账号的续期任务")
         
         results = []
         
         for i, account in enumerate(self.accounts, 1):
-            logger.info(f"👉 处理第 {i}/{len(self.accounts)} 个账号")
+            logger.info(f"👉 处理第 {i}/{len(self.accounts)} 个账号: {account['email']}")
             
             try:
-                auto_checkin = LeaflowAutoCheckin(account['email'], account['password'])
-                success, result = auto_checkin.run()
+                # 使用新的 PellaAutoRenew 类
+                auto_renew = PellaAutoRenew(account['email'], account['password'])
+                success, result = auto_renew.run()
                 results.append((account['email'], success, result))
                 
                 # 在账号之间添加间隔，避免请求过于频繁
@@ -552,11 +418,11 @@ def main():
         overall_success, detailed_results = manager.run_all()
         
         if overall_success:
-            logger.info("✅ 所有账号签到成功")
+            logger.info("✅ 所有账号续期任务完成")
             exit(0)
         else:
             success_count = sum(1 for _, success, _ in detailed_results if success)
-            logger.warning(f"⚠️ 部分账号签到失败: {success_count}/{len(detailed_results)} 成功")
+            logger.warning(f"⚠️ 部分账号续期失败: {success_count}/{len(detailed_results)} 成功")
             exit(0)
             
     except Exception as e:
