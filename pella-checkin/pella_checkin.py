@@ -26,8 +26,8 @@ class PellaAutoRenew:
     # 配置class类常量
     LOGIN_URL = "https://www.pella.app/login"
     HOME_URL = "https://www.pella.app/home" # 登录后跳转的首页
-    RENEW_WAIT_TIME = 10  # 点击续期链接后在新页面等待的秒数
-    WAIT_TIME_AFTER_LOGIN = 20  # 登录后等待的秒数
+    RENEW_WAIT_TIME = 5  # 点击续期链接后在新页面等待的秒数
+    WAIT_TIME_AFTER_LOGIN = 10  # 登录后等待的秒数
 
     def __init__(self, email, password):
         self.email = email
@@ -87,7 +87,8 @@ class PellaAutoRenew:
         从页面源码中提取过期时间，并计算总天数（包含小时和分钟的浮点数）。
         返回: (detailed_time_string, total_days_float)
         """
-        # 匹配详细时间格式: X D Y H Z M (例如: 2D 3H 7M), 使用非贪婪匹配确保正确性
+        # 匹配详细时间格式: X D Y H Z M (例如: 2D 3H 7M)
+        # 使用非贪婪匹配确保正确性
         match = re.search(r"Your server expires in\s*(\d+)D\s*(\d+)H\s*(\d+)M", page_source)
         if match:
             days_int = int(match.group(1))
@@ -128,35 +129,41 @@ class PellaAutoRenew:
         except Exception as e:
             raise Exception(f"❌ 输入邮箱时出错: {e}")
             
-        # 2. 点击 Continue 提交
+        # 2. 点击 Continue (Identifier 提交)
+        # 这是进入密码输入阶段的关键一步，因为密码框默认隐藏
         try:
             logger.info("🔍 查找并点击 Continue 按钮 (进入密码输入阶段)...")
             continue_btn_1 = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 5)
             self.driver.execute_script("arguments[0].click();", continue_btn_1)
             logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
-            time.sleep(2) 
-        except Exception as e:
-             logger.warning(f"⚠️ 无法找到或点击第一个 Continue 按钮，继续尝试查找密码框: {e}")
+            
+            # 显式等待 URL 包含 '/#/factor-one'，确认页面已切换
+            logger.info("⏳ 等待页面切换到密码输入视图...")
+            WebDriverWait(self.driver, 10).until(
+                EC.url_contains("#/factor-one")
+            )
+            logger.info("✅ 页面已切换到密码输入视图")
 
-        # 3. 输入密码 (现在应该已经可见了)
+        except Exception as e:
+             logger.warning(f"⚠️ 无法找到或点击第一个 Continue 按钮或页面切换失败，继续尝试查找密码框: {e}")
+
+        # 3. 输入密码
         try:
             logger.info("🔍 查找密码输入框...")
-            # 增加等待时间 5s，并等待元素可点击（即可见且启用）
+            # 密码输入框的 name 属性为 'password', 增加等待时间 5s，并等待元素可点击（即可见且启用）
             password_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='password']", 5)
             password_input.clear()
             password_input.send_keys(self.password)
             logger.info("✅ 密码输入完成")
         except TimeoutException:
-            # 增加对页面是否跳转的检查
-            current_url = self.driver.current_url
-            if not current_url.endswith("/#/factor-one"):
-                 logger.error(f"❌ 登录页面可能未正确切换到密码输入界面。当前 URL: {current_url}")
-            raise Exception("❌ 找不到密码输入框。请检查登录流程是否需要两次点击 'Continue'")
+            raise Exception("❌ 找不到密码输入框。确认页面已切换到密码输入界面，但元素仍不可见或未加载。")
         
         # 4. 点击 Continue 按钮 (最终登录提交)
         try:
             logger.info("🔍 查找最终 Continue 登录按钮...")
+            # 这是最终的登录提交按钮
             login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 5)
+            
             self.driver.execute_script("arguments[0].click();", login_btn)
             logger.info("✅ 已点击最终 Continue 登录按钮")
             
@@ -518,4 +525,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
