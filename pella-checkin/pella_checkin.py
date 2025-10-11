@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """
-Pella 自动续期脚本
+Pella 自动续期脚本 (增强稳定性)
 支持单账号和多账号
-单账号变量 PELLA_EMAIL=登录邮箱，PELLA_PASSWORD=登录密码
-多账号变量 PELLA_ACCOUNTS，格式：邮箱1:密码1,邮箱2:密码2,邮箱3:密码3
+
+配置变量说明 (兼容 Pella/Leaflow):
+- 单账号变量:
+    - PELLA_EMAIL / LEAFLOW_EMAIL=登录邮箱
+    - PELLA_PASSWORD / LEAFLOW_PASSWORD=登录密码
+- 多账号变量:
+    - PELLA_ACCOUNTS / LEAFLOW_ACCOUNTS: 格式：邮箱1:密码1,邮箱2:密码2,邮箱3:密码3
+- 通知变量 (可选):
+    - TG_BOT_TOKEN=Telegram 机器人 Token
+    - TG_CHAT_ID=Telegram 聊天 ID
 """
 
 import os
@@ -26,8 +34,8 @@ class PellaAutoRenew:
     # 配置class类常量
     LOGIN_URL = "https://www.pella.app/login"
     HOME_URL = "https://www.pella.app/home" # 登录后跳转的首页
-    RENEW_WAIT_TIME = 5  # 点击续期链接后在新页面等待的秒数
-    WAIT_TIME_AFTER_LOGIN = 10  # 登录后等待的秒数
+    RENEW_WAIT_TIME = 8  # 点击续期链接后在新页面等待的秒数 (略微增加等待时间以确保请求完成)
+    WAIT_TIME_AFTER_LOGIN = 15  # 登录后等待跳转到HOME页面的秒数
 
     def __init__(self, email, password):
         self.email = email
@@ -64,6 +72,7 @@ class PellaAutoRenew:
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
         try:
+            # 尝试从环境变量获取驱动路径，如果没有则使用默认
             self.driver = webdriver.Chrome(options=chrome_options)
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         except WebDriverException as e:
@@ -113,39 +122,33 @@ class PellaAutoRenew:
         return "无法提取", -1.0 # 未找到或格式不匹配
 
     def login(self):
-        """执行登录流程，并等待跳转到 HOME 页面"""
+        """执行登录流程，并等待跳转到 HOME 页面 (已优化，移除硬编码 URL 跳转)"""
         logger.info(f"🔑 开始登录流程")
-        
         self.driver.get(self.LOGIN_URL)
-        time.sleep(3)
         
         # 1. 输入邮箱
         try:
             logger.info("🔍 查找邮箱输入框...")
-            email_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='identifier']", 10)
+            # 邮箱输入框一般位于第一个 factor-one 阶段，这里使用 CSS 选择器
+            email_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='identifier']", 15)
             email_input.clear()
             email_input.send_keys(self.email)
             logger.info("✅ 邮箱输入完成")
         except Exception as e:
-            raise Exception(f"❌ 输入邮箱时出错: {e}")
+            raise Exception(f"❌ 输入邮箱或页面加载超时: {e}")
             
         # 2. 点击 Continue (Identifier 提交)
         try:
             logger.info("🔍 查找并点击 Continue 按钮 (进入密码输入阶段)...")
-            continue_btn_1 = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 5)
+            # 查找文本为 'Continue' 的按钮
+            continue_btn_1 = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             self.driver.execute_script("arguments[0].click();", continue_btn_1)
             logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
             
-            # 强制 URL 导航到 #/factor-one
-            target_url = self.LOGIN_URL + '#/factor-one'
-            logger.info(f"⚡️ 检测到页面切换异常，强制跳转到密码输入 URL: {target_url}")
-            self.driver.get(target_url) 
-            time.sleep(3)
-
-            # 3. 再次等待密码输入框出现
+            # 3. 等待密码输入框出现 (替代硬编码 URL 跳转)
             logger.info("⏳ 等待密码输入框出现...")
-            # 密码输入框的 name 属性为 'password', 使用 wait_for_element_clickable 确保元素已加载且可操作
-            password_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='password']", 10)
+            # 密码输入框的 name 属性为 'password'
+            password_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='password']", 15)
             logger.info("✅ 密码输入框已出现")
 
             # 4. 输入密码
@@ -154,15 +157,14 @@ class PellaAutoRenew:
             logger.info("✅ 密码输入完成")
             
         except TimeoutException:
-            # 如果等待密码输入框超时，则直接报错
             raise Exception("❌ 找不到密码输入框。在点击第一个 Continue 按钮后，密码框未在预期时间内加载。")
         except Exception as e:
-             raise Exception(f"❌ 登录流程失败 (步骤 2/3): {e}")
+            raise Exception(f"❌ 登录流程失败 (步骤 2/3): {e}")
 
         # 5. 点击 Continue 按钮 (最终登录提交)
         try:
             logger.info("🔍 查找最终 Continue 登录按钮...")
-            # 这是最终的登录提交按钮
+            # 这是最终的登录提交按钮，可能与前一个按钮是同一个元素，但状态变化
             login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             
             self.driver.execute_script("arguments[0].click();", login_btn)
@@ -186,12 +188,19 @@ class PellaAutoRenew:
         except TimeoutException:
             # 检查是否有登录错误信息
             try:
+                # 尝试查找登录错误信息的通用 CSS 选择器
                 error_msg = self.driver.find_element(By.CSS_SELECTOR, ".cl-auth-form-error-message, .cl-alert-danger")
                 if error_msg.is_displayed():
+                    # 尝试点击任何可能阻止操作的模态框关闭按钮 (可选但推荐)
+                    try:
+                        close_btn = self.driver.find_element(By.CSS_SELECTOR, "button[aria-label='Close']")
+                        self.driver.execute_script("arguments[0].click();", close_btn)
+                    except:
+                        pass
                     raise Exception(f"❌ 登录失败: {error_msg.text}")
             except:
                 pass
-            raise Exception("⚠️ 登录超时，无法确认登录状态")
+            raise Exception("⚠️ 登录超时，无法确认登录状态，可能发生重定向失败或网络问题。")
     
     def get_server_url(self):
         """在 HOME 页面查找并点击服务器链接，获取服务器 URL"""
@@ -200,7 +209,7 @@ class PellaAutoRenew:
         # 确保当前在 HOME 页面
         if not self.driver.current_url.startswith(self.HOME_URL):
             self.driver.get(self.HOME_URL)
-            time.sleep(5) # 页面加载等待
+            time.sleep(3) # 允许页面元素加载
             
         try:
             # 查找服务器链接元素：它是一个包含 href="/server/" 的 <a> 标签
@@ -212,10 +221,10 @@ class PellaAutoRenew:
             )
             
             # 获取链接并点击
-            server_url = server_link_element.get_attribute('href')
+            # server_url = server_link_element.get_attribute('href') # 实际不需要先获取，直接点击
             server_link_element.click()
             
-            # 等待页面跳转完成
+            # 等待页面跳转完成 (URL 包含 /server/ 即可)
             WebDriverWait(self.driver, 10).until(
                 EC.url_contains("/server/")
             )
@@ -238,7 +247,7 @@ class PellaAutoRenew:
             
         logger.info(f"👉 开始在服务器页面 ({self.server_url}) 执行续期流程")
         self.driver.get(self.server_url) # 确保在正确的页面
-        time.sleep(5) # 基础等待
+        time.sleep(5) # 基础等待页面内容加载
 
         # 1. 提取初始过期时间
         page_source = self.driver.page_source
@@ -251,6 +260,7 @@ class PellaAutoRenew:
         # 2. 查找并点击所有续期按钮
         try:
             # 查找所有带有 href 且没有被禁用的链接
+            # 优化：使用显式等待确保元素出现
             renew_link_selectors = "a[href*='/renew/']:not(.opacity-50):not(.pointer-events-none)"
             
             WebDriverWait(self.driver, 10).until(
@@ -260,7 +270,15 @@ class PellaAutoRenew:
             renew_buttons = self.driver.find_elements(By.CSS_SELECTOR, renew_link_selectors)
             
             if not renew_buttons:
-                return "⏳ 未找到可点击的续期按钮，可能今日已续期。"
+                # 检查是否有禁用的按钮存在，以确认是否真的已续期
+                disabled_renew_selectors = "a[href*='/renew/'].opacity-50, a[href*='/renew/'].pointer-events-none"
+                disabled_buttons = self.driver.find_elements(By.CSS_SELECTOR, disabled_renew_selectors)
+                
+                if disabled_buttons:
+                    return "⏳ 未找到可点击的续期按钮，但找到了禁用的按钮，可能今日已续期。"
+                else:
+                    return "⏳ 未找到任何续期按钮 (无论是可点击还是禁用)，脚本无法判断状态。"
+
 
             logger.info(f"👉 找到 {len(renew_buttons)} 个可点击的续期链接")
             
@@ -273,10 +291,18 @@ class PellaAutoRenew:
                 
                 # 在新标签页中打开链接，避免主页面状态被破坏
                 self.driver.execute_script("window.open(arguments[0]);", renew_url)
-                time.sleep(1)
+                time.sleep(1) # 切换窗口前的缓冲
                 
                 # 切换到新的标签页
                 self.driver.switch_to.window(self.driver.window_handles[-1])
+                
+                # 优化: 尝试等待新页面的某个元素或 URL 稳定
+                try:
+                    # 等待 URL 至少包含 'renew' 字样 (基础稳定性)
+                    WebDriverWait(self.driver, 5).until(EC.url_contains("/renew/"))
+                except:
+                    logger.warning("⚠️ 续期页面 URL 未在预期内加载，继续固定等待。")
+                    
                 logger.info(f"⏳ 在续期页面等待 {self.RENEW_WAIT_TIME} 秒...")
                 time.sleep(self.RENEW_WAIT_TIME)
                 
@@ -363,15 +389,15 @@ class MultiAccountManager:
         accounts = []
         logger.info("⏳ 开始加载账号配置...")
         
-        # 方法1: 冒号分隔多账号格式 (使用 PELLA_ACCOUNTS 变量)
+        # 方法1: 冒号分隔多账号格式 (兼容 PELLA_ACCOUNTS 和 LEAFLOW_ACCOUNTS 变量)
         accounts_str = os.getenv('PELLA_ACCOUNTS', os.getenv('LEAFLOW_ACCOUNTS', '')).strip()
         if accounts_str:
             try:
                 logger.info("⏳ 尝试解析冒号分隔多账号配置")
                 # 兼容逗号、分号分隔
-                account_pairs = [pair.strip() for pair in re.split(r'[;,]', accounts_str)] 
+                account_pairs = [pair.strip() for pair in re.split(r'[;,]', accounts_str) if pair.strip()] 
                 
-                logger.info(f"👉 找到 {len(account_pairs)} 个账号对")
+                logger.info(f"👉 找到 {len(account_pairs)} 个账号对配置字符串")
                 
                 for i, pair in enumerate(account_pairs):
                     if ':' in pair:
@@ -386,9 +412,9 @@ class MultiAccountManager:
                             })
                             logger.info(f"✅ 成功添加第 {i+1} 个账号")
                         else:
-                            logger.warning(f"❌ 账号对格式错误或内容为空")
+                            logger.warning(f"❌ 第 {i+1} 个账号对格式错误或内容为空")
                     else:
-                        logger.warning(f"❌ 账号对缺少分隔符: {pair}")
+                        logger.warning(f"❌ 第 {i+1} 个账号对缺少分隔符 ':' : {pair}")
                 
                 if accounts:
                     logger.info(f"👉 从多账号格式成功加载了 {len(accounts)} 个账号")
@@ -398,7 +424,7 @@ class MultiAccountManager:
             except Exception as e:
                 logger.error(f"❌ 解析多账号配置失败: {e}")
         
-        # 方法2: 单账号格式 (使用 PELLA_EMAIL 和 PELLA_PASSWORD 变量)
+        # 方法2: 单账号格式 (兼容 PELLA_EMAIL/PASSWORD 和 LEAFLOW_EMAIL/PASSWORD 变量)
         single_email = os.getenv('PELLA_EMAIL', os.getenv('LEAFLOW_EMAIL', '')).strip()
         single_password = os.getenv('PELLA_PASSWORD', os.getenv('LEAFLOW_PASSWORD', '')).strip()
         
@@ -413,8 +439,8 @@ class MultiAccountManager:
         # 如果所有方法都失败
         logger.error("⚠️ 未找到有效的账号配置")
         logger.error("⚠️ 请检查以下环境变量设置:")
-        logger.error("⚠️ 1. PELLA_ACCOUNTS: 冒号分隔多账号 (email1:pass1,email2:pass2) 或使用 LEAFLOW_ACCOUNTS")
-        logger.error("⚠️ 2. PELLA_EMAIL 和 PELLA_PASSWORD: 单账号 或使用 LEAFLOW_EMAIL/LEAFLOW_PASSWORD")
+        logger.error("⚠️ 1. PELLA_ACCOUNTS 或 LEAFLOW_ACCOUNTS: 冒号分隔多账号 (email1:pass1,email2:pass2)")
+        logger.error("⚠️ 2. PELLA_EMAIL/PELLA_PASSWORD 或 LEAFLOW_EMAIL/LEAFLOW_PASSWORD: 单账号")
         
         raise ValueError("⚠️ 未找到有效的账号配置")
     
@@ -446,7 +472,14 @@ class MultiAccountManager:
                     status = "❌" # 失败
                 
                 # 隐藏邮箱部分字符以保护隐私
-                masked_email = email[:3] + "***" + email[email.find("@"):]
+                # 使用正则表达式安全地提取 @ 符号之前的部分
+                if '@' in email:
+                    local_part, domain = email.split('@', 1)
+                    masked_local = local_part[:3] + "***"
+                    masked_email = masked_local + "@" + domain
+                else:
+                    masked_email = email[:3] + "***"
+                
                 # 限制结果长度
                 short_result = result.split('\n')[0][:100] + ('...' if len(result.split('\n')[0]) > 100 else '')
                 message += f"{status} {masked_email}: {short_result}\n"
@@ -477,11 +510,14 @@ class MultiAccountManager:
             logger.info(f"==================================================")
             logger.info(f"👉 处理第 {i}/{len(self.accounts)} 个账号: {account['email']}")
             
+            # 初始化成功/失败标志
+            success, result = False, "未运行"
+
             try:
                 # 使用新的 PellaAutoRenew 类
                 auto_renew = PellaAutoRenew(account['email'], account['password'])
                 success, result = auto_renew.run()
-                results.append((account['email'], success, result))
+                
                 
                 # 在账号之间添加间隔，避免请求过于频繁
                 if i < len(self.accounts):
@@ -492,7 +528,9 @@ class MultiAccountManager:
             except Exception as e:
                 error_msg = f"❌ 处理账号时发生异常: {str(e)}"
                 logger.error(error_msg)
-                results.append((account['email'], False, error_msg))
+                result = error_msg
+            
+            results.append((account['email'], success, result))
         
         logger.info(f"==================================================")
         # 发送汇总通知
