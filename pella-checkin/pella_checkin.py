@@ -116,7 +116,7 @@ class PellaAutoRenew:
         return "无法提取", -1.0
 
     def login(self):
-        """执行登录流程，使用 JS 强制输入绕过 'element not interactable' 错误"""
+        """执行登录流程，使用 JS 强制输入绕过 'element not interactable' 错误，并增强最终点击的稳定性"""
         logger.info(f"🔑 开始登录流程")
         self.driver.get(self.LOGIN_URL)
         
@@ -129,7 +129,6 @@ class PellaAutoRenew:
         # 1. 输入邮箱
         try:
             logger.info("🔍 查找邮箱输入框...")
-            # 使用 presence_of_element_located 确保元素存在即可
             email_input = self.wait_for_element_present(By.CSS_SELECTOR, "input[name='identifier']", 15)
             
             # 使用 JS 强制填充值和触发事件
@@ -142,6 +141,7 @@ class PellaAutoRenew:
         # 2. 点击 Continue (Identifier 提交)
         try:
             logger.info("🔍 查找并点击 Continue 按钮 (进入密码输入阶段)...")
+            # 第一次点击，使用 clickable 确保页面加载完成
             continue_btn_1 = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             
             initial_url = self.driver.current_url 
@@ -157,16 +157,14 @@ class PellaAutoRenew:
             # 3. 等待密码输入框出现
             logger.info("⏳ 等待密码输入框出现...")
             password_selector = "input[type='password']" 
-            # 使用 presence_of_element_located 确保元素存在
             password_input = self.wait_for_element_present(By.CSS_SELECTOR, password_selector, 15)
             logger.info("✅ 密码输入框已出现")
 
-            # 4. 输入密码 (使用 JS 强制填充，解决 element not interactable 问题)
+            # 4. 输入密码 (使用 JS 强制填充)
             js_set_value_and_trigger(password_input, self.password)
             logger.info("✅ 密码输入 (JS 强制填充) 完成")
             
         except TimeoutException as te:
-            # 修正错误处理逻辑
             if password_selector in str(te):
                  raise Exception(f"❌ 找不到密码输入框 ({password_selector})。密码框未在预期时间内加载。")
             elif "url_changes" in str(te):
@@ -175,18 +173,27 @@ class PellaAutoRenew:
                  raise Exception(f"❌ 登录流程在等待元素时超时: {te}")
                  
         except Exception as e:
-            # 捕获其他如 NoSuchElementException, element not interactable 等错误
             raise Exception(f"❌ 登录流程失败 (步骤 2/3): {e}")
 
         # 5. 点击 Continue 按钮提交登录
         try:
+            # 【关键修改】在点击前增加一个短暂等待，确保 JS 验证完成，按钮状态更新
+            logger.info("⏳ 等待 2 秒，确保最终登录按钮被激活...")
+            time.sleep(2) 
+
             logger.info("🔍 查找 Continue 登录按钮...")
-            login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
-            self.driver.execute_script("arguments[0].click();", login_btn)
-            logger.info("✅ 已点击 Continue 按钮")
+            # 使用 presence_of_element_located 确保元素存在，如果超时，说明元素根本没出现
+            login_btn = self.wait_for_element_present(By.XPATH, "//button[contains(., 'Continue')]", 10)
             
+            # 使用 JS 强制点击，绕过可能存在的元素不可交互问题
+            self.driver.execute_script("arguments[0].click();", login_btn)
+            logger.info("✅ (JS 强制) 已点击 Continue 按钮")
+            
+        except TimeoutException as te:
+            raise Exception(f"❌ 查找最终 Continue 按钮超时 (10s): {te}")
         except Exception as e:
-            raise Exception(f"❌ 点击最终 Continue 按钮失败: {e}")
+            # 如果强制点击仍然失败，则抛出更详细的错误
+            raise Exception(f"❌ 点击最终 Continue 按钮失败 (可能元素仍不可交互或未找到): {e}")
         
         # 6. 等待登录完成并跳转到 HOME 页面
         try:
