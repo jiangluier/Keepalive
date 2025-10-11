@@ -132,12 +132,18 @@ class PellaAutoRenew:
         # 2. 点击 Continue (Identifier 提交)
         try:
             logger.info("🔍 查找并点击 Continue 按钮 (进入密码输入阶段)...")
-            # 注意: 这里使用 XPATH 查找包含 'Continue' 文本的按钮
             continue_btn_1 = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 5)
             self.driver.execute_script("arguments[0].click();", continue_btn_1)
             logger.info("✅ 已点击 Continue 按钮 (进入密码输入)")
             
-            # 3. 等待密码输入框出现并可点击
+            # --- 强制刷新修复 ---
+            logger.info("⏳ 等待页面切换完成 (2秒基础等待)...")
+            time.sleep(2) 
+            logger.info("⚡️ 检测到页面跳转异常，执行强制刷新以加载密码输入框...")
+            self.driver.refresh()
+            time.sleep(3)
+
+            # 不再依赖 URL 切换，直接等待密码输入框出现并可点击
             logger.info("⏳ 等待密码输入框出现...")
             # 密码输入框的 name 属性为 'password', 使用 wait_for_element_clickable 确保元素已加载且可操作
             password_input = self.wait_for_element_clickable(By.CSS_SELECTOR, "input[name='password']", 10)
@@ -157,6 +163,7 @@ class PellaAutoRenew:
         # 5. 点击 Continue 按钮 (最终登录提交)
         try:
             logger.info("🔍 查找最终 Continue 登录按钮...")
+            # 这是最终的登录提交按钮
             login_btn = self.wait_for_element_clickable(By.XPATH, "//button[contains(., 'Continue')]", 10)
             
             self.driver.execute_script("arguments[0].click();", login_btn)
