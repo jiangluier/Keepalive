@@ -485,7 +485,7 @@ class MultiAccountManager:
             message += f"📋 共处理账号: {total_count} 个，其中：\n"
             message += f"📊 手动签到: {already_checked_count} 个\n"
             message += f"📊 脚本签到: {script_success_count} 个\n"
-            message += f"📊 签到成功: {total_success_count} 个\n"
+            message += f"✅ 签到成功: {total_success_count} 个\n"
             message += f"❌ 签到失败: {failure_count} 个\n\n"
          
             for email, success, result in results:
@@ -568,5 +568,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
