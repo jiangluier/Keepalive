@@ -1,21 +1,11 @@
 # cf worker 保活 serv00 节点
   
-## 文件
-本文件夹内 _worker.js
-
-## 教程
-原作者: 天诚  
-https://linux.do/t/topic/181957  
-
-----
-
-# cf worker 保 serv 账号，不保活
 按照serv的封禁趋势，禁止搭建代理是迟早的事，且serv本身正确的用途是建站而不是代理，因此我重置了自己所有的serv服务器，用来搭建各种服务和数据库
 
 但是serv有登录要求，90天不登录可能会被封号，因此诞生了这个项目，参考了天诚的保活项目，也就是文件夹内的_worker.js
 
 ## 文件
-文件夹内 serv-account-alive.js
+文件夹内 `serv-account-alive.js`
 
 ## 特点
 - 有前端可视化面板，可手动执行
@@ -28,7 +18,7 @@ https://linux.do/t/topic/181957
 在cf新建一个worker，将代码复制到其中，部署
 
 ### 添加环境变量
-- ACCOUNTS_URL = 存储你serv登录信息的直链（必填），格式模板:
+- ACCOUNTS_URL = 存储你serv登录信息的直链（必填），直链内容模板:
 ```
 {
   "accounts": [
