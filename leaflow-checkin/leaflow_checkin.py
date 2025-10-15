@@ -405,14 +405,15 @@ class MultiAccountManager:
         accounts = []
         logger.info("⏳ 开始加载账号配置...")
         
-        # 方法1: 冒号分隔多账号格式
+        # 方法1: 统一从 LEAFLOW_ACCOUNTS 读取多账号（支持逗号或换行）
         accounts_str = os.getenv('LEAFLOW_ACCOUNTS', '').strip()
         if accounts_str:
             try:
-                logger.info("⏳ 尝试解析冒号分隔多账号配置")
-                account_pairs = [pair.strip() for pair in accounts_str.split(',')]
-                
-                logger.info(f"👉 找到 {len(account_pairs)} 个账号")
+                logger.info("⏳ 尝试解析多账号，支持逗号或换行分隔")
+                account_pairs = [
+                    pair.strip() for pair in accounts_str.replace('\r', '').replace(',', '\n').split('\n') if pair.strip()
+                ]
+                logger.info(f"👉 共找到 {len(account_pairs)} 个账号")
                 
                 for i, pair in enumerate(account_pairs):
                     if ':' in pair:
@@ -454,8 +455,10 @@ class MultiAccountManager:
         # 如果所有方法都失败
         logger.error("⚠️ 未找到有效的账号配置")
         logger.error("⚠️ 请检查以下环境变量设置:")
-        logger.error("⚠️ 1. LEAFLOW_ACCOUNTS: 冒号分隔多账号 (email1:pass1,email2:pass2)")
-        logger.error("⚠️ 2. LEAFLOW_EMAIL 和 LEAFLOW_PASSWORD: 单账号")
+        logger.error("⚠️ 1. 多账号变量: LEAFLOW_ACCOUNTS 支持以下两种格式：")
+        logger.error("   - 逗号分隔: user1@gmail.com:pass1,user2@qq.com:pass2")
+        logger.error("   - 换行分隔: user1@gmail.com:pass1\n user2@qq.com:pass2")
+        logger.error("⚠️ 2. 单账号变量 LEAFLOW_EMAIL 和 LEAFLOW_PASSWORD")
         
         raise ValueError("⚠️ 未找到有效的账号配置")
     
@@ -565,3 +568,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
