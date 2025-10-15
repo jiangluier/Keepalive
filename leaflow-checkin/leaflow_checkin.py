@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Leaflow 多账号自动签到脚本
-支持冒号分隔多账号和单账号配置
+Leaflow 自动签到脚本
+支持单账号和多账号签到
 """
 
 import os
@@ -23,9 +23,9 @@ class LeaflowAutoCheckin:
     # 配置class类常量
     LOGIN_URL = "https://leaflow.net/login"
     CHECKIN_URL = "https://checkin.leaflow.net"
-    WAIT_TIME_AFTER_LOGIN = 20  # 登录后等待的秒数
+    WAIT_TIME_AFTER_LOGIN = 15  # 登录后等待的秒数
     WAIT_TIME_AFTER_CHECKIN_CLICK = 5  # 点击签到后等待的秒数
-    RETRY_WAIT_TIME_PAGE_LOAD = 20 # 签到页面加载每次重试等待时间
+    RETRY_WAIT_TIME_PAGE_LOAD = 15 # 签到页面加载每次重试等待时间
     RETRY_COUNT_PAGE_LOAD = 3 # 签到页面加载重试次数
 
     def __init__(self, email, password):
@@ -568,4 +568,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
