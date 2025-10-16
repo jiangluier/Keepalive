@@ -5,45 +5,41 @@ import re
 
 # -----------------------------------------------------------------------
 BASE_URL = "https://client.webhostmost.com"
-LOGIN_URL = f"{BASE_URL}/login"  # 登录页
-REDIRECT_URL = f"{BASE_URL}/clientarea.php"  # 登录成功后跳转页
-EMAIL_FIELD = "username"     # 登录表单中邮箱字段的名称
-PASSWORD_FIELD = "password"  # 登录表单中密码字段的名称
+LOGIN_URL = f"{BASE_URL}/login"
+REDIRECT_URL = f"{BASE_URL}/clientarea.php"
+EMAIL_FIELD = "username"
+PASSWORD_FIELD = "password"
+TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
+TG_CHAT_ID = os.getenv("TG_CHAT_ID")
 # -----------------------------------------------------------------------
 
+
 def parse_users(users_secret):
-    """
-    将 Action Secret 中 '邮箱1:密码1\n邮箱2:密码2' 的格式解析为列表。
-    """
+    """解析 GitHub Secret 格式：邮箱:密码\\n邮箱2:密码2"""
     users = []
     if not users_secret:
-        print("错误：未找到 WHM_ACCOUNT 环境变量中的用户数据。")
+        print("❌ 未找到 WHM_ACCOUNT 环境变量中的用户数据。")
         return users
 
     for line in users_secret.strip().split('\n'):
         parts = line.strip().split(':', 1)
         if len(parts) == 2:
-            email = parts[0].strip()
-            password = parts[1].strip()
+            email, password = parts[0].strip(), parts[1].strip()
             users.append({'email': email, 'password': password})
         else:
-            print(f"警告：跳过格式错误的行: {line}")
+            print(f"⚠️ 跳过格式错误的行: {line}")
     return users
 
 
 def get_csrf_token(session):
-    """
-    访问登录页，提取 CSRF token。
-    """
+    """从登录页提取 CSRF Token"""
     try:
         r = session.get(LOGIN_URL, timeout=15)
         r.raise_for_status()
-
-        # 匹配 hidden input 中的 token 值
         match = re.search(r'name="token"\s+value="([^"]+)"', r.text)
         if match:
             token = match.group(1)
-            print(f"✅ 获取到 CSRF Token: {token[:8]}...")
+            print(f"🔑 获取到 CSRF Token: {token[:8]}...")
             return token
         else:
             print("⚠️ 未找到 CSRF Token，可能页面结构已变。")
@@ -53,26 +49,29 @@ def get_csrf_token(session):
         return None
 
 
+def extract_remaining_days(html):
+    """从登录后页面中提取“剩余时间”字段"""
+    match = re.search(r"Time until suspension:\s*([0-9]+)d", html)
+    if match:
+        return int(match.group(1))
+    return None
+
+
 def attempt_login(email, password):
-    """
-    使用 POST 请求尝试登录。
-    """
+    """尝试登录并返回结果与剩余时间"""
     session = requests.Session()
+    print(f"\n👤 尝试登录用户：{email}")
 
-    print(f"\n尝试登录用户：{email}...")
-
-    # 先获取 token
     token = get_csrf_token(session)
     if not token:
         print("⚠️ 获取 CSRF Token 失败，跳过此账号。")
-        return False
+        return {"email": email, "success": False, "reason": "无法获取 CSRF Token"}
 
-    # 构造POST请求体
     payload = {
         EMAIL_FIELD: email,
         PASSWORD_FIELD: password,
         "token": token,
-        "rememberme": "on",  # 有些站点需要带这个字段
+        "rememberme": "on",
     }
 
     headers = {
@@ -84,26 +83,53 @@ def attempt_login(email, password):
     try:
         response = session.post(LOGIN_URL, data=payload, headers=headers, allow_redirects=True, timeout=15)
 
-        # 判断是否登录成功
-        if REDIRECT_URL in response.url:
-            print(f"✅ 成功登录用户 {email}。跳转到: {response.url}")
-            return True
-        elif "clientarea.php" in response.text.lower():
-            print(f"✅ 成功登录用户 {email}（检测到 clientarea 内容）")
-            return True
-        elif response.status_code == 200 and "Invalid CSRF token" in response.text:
-            print(f"❌ 登录失败：Token 无效。用户 {email}")
-            return False
-        elif response.status_code == 200 and "incorrect" in response.text.lower():
+        if REDIRECT_URL in response.url or "clientarea.php" in response.text.lower():
+            print(f"✅ 成功登录用户 {email}，正在解析剩余时间...")
+            remaining_days = extract_remaining_days(response.text)
+            if remaining_days is not None:
+                print(f"📆 剩余时间: {remaining_days} 天")
+            else:
+                print("⚠️ 未找到剩余时间字段。")
+            return {"email": email, "success": True, "days": remaining_days}
+
+        elif "incorrect" in response.text.lower():
             print(f"❌ 登录失败：账号或密码错误。用户 {email}")
-            return False
+            return {"email": email, "success": False, "reason": "账号或密码错误"}
+
+        elif "Invalid CSRF token" in response.text:
+            print(f"❌ 登录失败：Token 无效。用户 {email}")
+            return {"email": email, "success": False, "reason": "CSRF Token 无效"}
+
         else:
-            print(f"⚠️ 登录请求状态码为 {response.status_code}，未检测到成功标识。URL: {response.url}")
-            return False
+            print(f"⚠️ 登录失败：未知原因。URL: {response.url}")
+            return {"email": email, "success": False, "reason": "未知错误"}
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ 登录用户 {email} 时发生连接错误: {e}")
-        return False
+        print(f"❌ 登录用户 {email} 时发生错误: {e}")
+        return {"email": email, "success": False, "reason": str(e)}
+
+
+def send_tg_message(message):
+    """通过 Telegram 发送通知"""
+    if not TG_BOT_TOKEN or not TG_CHAT_ID:
+        print("⚠️ 未设置 TG_BOT_TOKEN 或 TG_CHAT_ID，跳过 Telegram 通知。")
+        return
+
+    url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+    data = {
+        "chat_id": TG_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+
+    try:
+        r = requests.post(url, data=data, timeout=10)
+        if r.status_code == 200:
+            print("📨 Telegram 通知已发送。")
+        else:
+            print(f"⚠️ Telegram 通知发送失败: {r.status_code} {r.text}")
+    except Exception as e:
+        print(f"⚠️ Telegram 通知错误: {e}")
 
 
 def main():
@@ -114,20 +140,48 @@ def main():
         sys.exit(1)
 
     users = parse_users(user_credentials_secret)
-
     if not users:
         print("未解析到任何用户。退出。")
         sys.exit(1)
 
-    all_success = True
+    results = []
     for user in users:
-        if not attempt_login(user['email'], user['password']):
-            all_success = False
+        result = attempt_login(user['email'], user['password'])
+        results.append(result)
 
-    if all_success:
-        print("\n所有用户登录尝试成功。")
-    else:
-        print("\n部分或所有用户登录失败。请检查日志。")
+    # 统计结果
+    total = len(results)
+    success = sum(1 for r in results if r["success"])
+    failed = total - success
+
+    # 生成报告
+    report_lines = [
+        "🌐 **webhostmost 登录报告**",
+        "===================",
+        f"👥 共处理账号: {total} 个",
+        f"✅ 登录成功: {success} 个",
+        f"❌ 登录失败: {failed} 个",
+        "===================",
+        "📋 登录详情："
+    ]
+
+    for r in results:
+        if r["success"]:
+            days_text = f" 剩余时间 {r['days']} 天" if r.get("days") else " 剩余时间未知"
+            report_lines.append(f"🟢 {r['email']} 登录成功，{days_text}")
+        else:
+            report_lines.append(f"🔴 {r['email']} 登录失败，原因：{r.get('reason', '未知错误')}")
+
+    message = "\n".join(report_lines)
+    print("\n" + message)
+
+    # 发送 Telegram 通知
+    send_tg_message(message)
+
+    # 所有失败则报错退出
+    if success == 0:
+        print("❌ 所有账号登录失败，脚本退出。")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
