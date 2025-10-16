@@ -27,5 +27,7 @@ jobs:
       - name: Execute Login Script
         env:
           WHM_ACCOUNT: ${{ secrets.WHM_ACCOUNT }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
         run: |
           python webhostmost-checkin/checkin.py
