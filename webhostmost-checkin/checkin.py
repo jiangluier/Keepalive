@@ -1,10 +1,12 @@
 import requests
 import os
 import sys
+import re
 
 # -----------------------------------------------------------------------
-LOGIN_URL = "https://client.webhostmost.com/login"  # 登录URL
-REDIRECT_URL = "https://client.webhostmost.com/clientarea.php" # 跳转URL
+BASE_URL = "https://client.webhostmost.com"
+LOGIN_URL = "{BASE_URL}/login"  # 登录页
+REDIRECT_URL = "{BASE_URL}/clientarea.php"  # 登录成功后跳转页
 EMAIL_FIELD = "username"     # 登录表单中邮箱字段的名称
 PASSWORD_FIELD = "password"  # 登录表单中密码字段的名称
 # -----------------------------------------------------------------------
@@ -28,42 +30,83 @@ def parse_users(users_secret):
             print(f"警告：跳过格式错误的行: {line}")
     return users
 
+
+def get_csrf_token(session):
+    """
+    访问登录页，提取 CSRF token。
+    """
+    try:
+        r = session.get(LOGIN_URL, timeout=15)
+        r.raise_for_status()
+
+        # 匹配 hidden input 中的 token 值
+        match = re.search(r'name="token"\s+value="([^"]+)"', r.text)
+        if match:
+            token = match.group(1)
+            print(f"✅ 获取到 CSRF Token: {token[:8]}...")
+            return token
+        else:
+            print("⚠️ 未找到 CSRF Token，可能页面结构已变。")
+            return None
+    except requests.RequestException as e:
+        print(f"❌ 获取登录页时出错: {e}")
+        return None
+
+
 def attempt_login(email, password):
     """
     使用 POST 请求尝试登录。
     """
     session = requests.Session()
-    
+
+    print(f"\n尝试登录用户：{email}...")
+
+    # 先获取 token
+    token = get_csrf_token(session)
+    if not token:
+        print("⚠️ 获取 CSRF Token 失败，跳过此账号。")
+        return False
+
     # 构造POST请求体
     payload = {
         EMAIL_FIELD: email,
         PASSWORD_FIELD: password,
+        "token": token,
+        "rememberme": "on",  # 有些站点需要带这个字段
     }
 
-    print(f"尝试登录用户：{email}...")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Referer": LOGIN_URL,
+        "Origin": BASE_URL,
+    }
 
     try:
-        # 发送POST请求
-        response = session.post(LOGIN_URL, data=payload, allow_redirects=True, timeout=15)
-        
-        # 检查最终跳转的URL或响应内容来判断是否登录成功
-        if REDIRECT_URL in response.url and response.status_code == 200:
-            print(f"✅ 成功登录用户 {email}。最终URL: {response.url}")
+        response = session.post(LOGIN_URL, data=payload, headers=headers, allow_redirects=True, timeout=15)
+
+        # 判断是否登录成功
+        if REDIRECT_URL in response.url:
+            print(f"✅ 成功登录用户 {email}。跳转到: {response.url}")
             return True
-        elif response.status_code == 200:
-             print(f"⚠️ 登录请求状态码为 200，但未跳转到预期页面。最终URL: {response.url}")
-             print("可能需要检查页面内容或 CSRF token。")
-             return False
+        elif "clientarea.php" in response.text.lower():
+            print(f"✅ 成功登录用户 {email}（检测到 clientarea 内容）")
+            return True
+        elif response.status_code == 200 and "Invalid CSRF token" in response.text:
+            print(f"❌ 登录失败：Token 无效。用户 {email}")
+            return False
+        elif response.status_code == 200 and "incorrect" in response.text.lower():
+            print(f"❌ 登录失败：账号或密码错误。用户 {email}")
+            return False
         else:
-            print(f"❌ 登录失败用户 {email}。状态码: {response.status_code}")
+            print(f"⚠️ 登录请求状态码为 {response.status_code}，未检测到成功标识。URL: {response.url}")
             return False
 
     except requests.exceptions.RequestException as e:
         print(f"❌ 登录用户 {email} 时发生连接错误: {e}")
         return False
 
+
 def main():
-    # 从环境变量（由 GitHub Action Secret 传入）中获取凭证
     user_credentials_secret = os.getenv('WHM_ACCOUNT')
 
     if not user_credentials_secret:
@@ -85,7 +128,7 @@ def main():
         print("\n所有用户登录尝试成功。")
     else:
         print("\n部分或所有用户登录失败。请检查日志。")
-        # 如果需要，可以在这里 sys.exit(1) 让 Action 失败
+
 
 if __name__ == "__main__":
     main()
