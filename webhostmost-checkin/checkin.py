@@ -5,8 +5,8 @@ import re
 
 # -----------------------------------------------------------------------
 BASE_URL = "https://client.webhostmost.com"
-LOGIN_URL = "{BASE_URL}/login"  # 登录页
-REDIRECT_URL = "{BASE_URL}/clientarea.php"  # 登录成功后跳转页
+LOGIN_URL = f"{BASE_URL}/login"  # 登录页
+REDIRECT_URL = f"{BASE_URL}/clientarea.php"  # 登录成功后跳转页
 EMAIL_FIELD = "username"     # 登录表单中邮箱字段的名称
 PASSWORD_FIELD = "password"  # 登录表单中密码字段的名称
 # -----------------------------------------------------------------------
