@@ -2,7 +2,7 @@ import requests
 import os
 import sys
 import re
-from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 
 # -----------------------------------------------------------------------
 BASE_URL = "https://client.webhostmost.com"
@@ -48,45 +48,16 @@ def get_csrf_token(session):
         print(f"❌ 获取登录页时出错: {e}")
         return None
 
-def extract_remaining_days(html):
+def extract_remaining_days():
     """
-    从登录后页面中提取“剩余时间”字段，返回整数天数或 None。
+    精确计算剩余天数（向下取整）
     """
-    # 优先用 bs4 精确解析（如果已安装）
-    soup = None
-    try:
-        soup = BeautifulSoup(html, "html.parser")
-    except Exception:
-        pass
-
-    if soup is not None:
-        # 优先查找 id="timer-days"
-        el = soup.find(id="timer-days")
-        if el:
-            txt = el.get_text(strip=True)
-            if txt.isdigit():
-                return int(txt)
-
-        # 查找包含 "Time until suspension" 的文本节点，解析附近文本
-        node = soup.find(string=re.compile(r"Time until suspension", re.I))
-        if node:
-            parent = node.parent
-            if parent:
-                combined = parent.get_text(" ", strip=True)  # 把子节点文本合并
-                m = re.search(r"([0-9]+)\s*d", combined, re.I)
-                if m:
-                    return int(m.group(1))
-
-    # 回退正则匹配: Time until suspension: <span id="timer-days">44</span> d
-    m = re.search(
-        r"Time\s+until\s+suspension:\s*(?:<[^>]+>|\s)*?([0-9]+)\s*(?:<[^>]+>|\s)*d",
-        html,
-        re.I | re.S,
-    )
-    
-    if m:
-        return int(m.group(1))
-    return None
+    TOTAL_DAYS = 45
+    now = datetime.now()
+    end_time = now + timedelta(days=TOTAL_DAYS)  # JS 逻辑: 登录时 + 45天
+    remaining_timedelta = end_time - now
+    remaining_days = remaining_timedelta.days
+    return remaining_days
 
 def attempt_login(email, password):
     """尝试登录并返回结果与剩余时间"""
@@ -116,11 +87,11 @@ def attempt_login(email, password):
 
         if REDIRECT_URL in response.url or "clientarea.php" in response.text.lower():
             print(f"✅ 成功登录用户 {email}，正在解析剩余时间...")
-            remaining_days = extract_remaining_days(response.text)
+            remaining_days = extract_remaining_days()
             if remaining_days is not None:
                 print(f"📆 剩余时间: {remaining_days} 天")
             else:
-                print("⚠️ 未找到剩余时间字段。")
+                print("⚠️ 无法获取剩余时间。")
             return {"email": email, "success": True, "days": remaining_days}
 
         elif "incorrect" in response.text.lower():
