@@ -2,6 +2,7 @@ import requests
 import os
 import sys
 import re
+from bs4 import BeautifulSoup
 
 # -----------------------------------------------------------------------
 BASE_URL = "https://client.webhostmost.com"
@@ -30,7 +31,6 @@ def parse_users(users_secret):
             print(f"⚠️ 跳过格式错误的行: {line}")
     return users
 
-
 def get_csrf_token(session):
     """从登录页提取 CSRF Token"""
     try:
@@ -48,14 +48,45 @@ def get_csrf_token(session):
         print(f"❌ 获取登录页时出错: {e}")
         return None
 
-
 def extract_remaining_days(html):
-    """从登录后页面中提取“剩余时间”字段"""
-    match = re.search(r"Time until suspension:\s*([0-9]+)d", html)
-    if match:
-        return int(match.group(1))
-    return None
+    """
+    从登录后页面中提取“剩余时间”字段，返回整数天数或 None。
+    """
+    # 优先用 bs4 精确解析（如果已安装）
+    soup = None
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:
+        pass
 
+    if soup is not None:
+        # 优先查找 id="timer-days"
+        el = soup.find(id="timer-days")
+        if el:
+            txt = el.get_text(strip=True)
+            if txt.isdigit():
+                return int(txt)
+
+        # 查找包含 "Time until suspension" 的文本节点，解析附近文本
+        node = soup.find(string=re.compile(r"Time until suspension", re.I))
+        if node:
+            parent = node.parent
+            if parent:
+                combined = parent.get_text(" ", strip=True)  # 把子节点文本合并
+                m = re.search(r"([0-9]+)\s*d", combined, re.I)
+                if m:
+                    return int(m.group(1))
+
+    # 回退正则匹配: Time until suspension: <span id="timer-days">44</span> d
+    m = re.search(
+        r"Time\s+until\s+suspension:\s*(?:<[^>]+>|\s)*?([0-9]+)\s*(?:<[^>]+>|\s)*d",
+        html,
+        re.I | re.S,
+    )
+    
+    if m:
+        return int(m.group(1))
+    return None
 
 def attempt_login(email, password):
     """尝试登录并返回结果与剩余时间"""
