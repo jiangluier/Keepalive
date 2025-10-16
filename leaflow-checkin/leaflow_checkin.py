@@ -313,7 +313,7 @@ class LeaflowAutoCheckin:
         click_result = self.find_and_click_checkin_button()
         
         if click_result == "ALREADY_CHECKED_IN":
-            return "⏳ 今日已签到，请明日再来"
+            return "⏳ 今日已手动签到"
         if click_result != "CLICK_SUCCESS":
             raise Exception("⚠️ 找不到立即签到按钮或按钮不可点击")
         
@@ -470,21 +470,16 @@ class MultiAccountManager:
         
         try:
             SUCCESS_MSG = "⏳ 今日已手动签到"
-            # 脚本本次签到的账号
-            script_success_count = sum(1 for _, success, result in results if success and result != SUCCESS_MSG)
-            # 本次操作前已签到的账号
-            already_checked_count = sum(1 for _, _, result in results if result == SUCCESS_MSG)
-            # 失败的账号
-            failure_count = sum(1 for _, success, _ in results if not success)
-            # 处理的账号总数
-            total_count = len(results)
-            # 已成功签到的账号总数
-            total_success_count = already_checked_count + script_success_count
+            script_success_count = sum(1 for _, success, result in results if success and result != SUCCESS_MSG)  # 脚本签到的账号数量
+            already_checked_count = sum(1 for _, _, result in results if result == SUCCESS_MSG)  # 手动签到的账号数量
+            failure_count = sum(1 for _, success, _ in results if not success)  # 签到失败的账号数量
+            total_success_count = already_checked_count + script_success_count  # 签到成功的账号数量 (含已手动签到)
+            total_count = len(results)  # 账号总数量
 
             message = f"🎁 Leaflow自动签到通知\n\n"
             message += f"📋 共处理账号: {total_count} 个，其中：\n"
-            message += f"📊 手动签到: {already_checked_count} 个\n"
-            message += f"📊 脚本签到: {script_success_count} 个\n"
+            message += f"👏 手动签到: {already_checked_count} 个\n"
+            message += f"🚀 脚本签到: {script_success_count} 个\n"
             message += f"✅ 签到成功: {total_success_count} 个\n"
             message += f"❌ 签到失败: {failure_count} 个\n\n"
          
@@ -568,3 +563,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
