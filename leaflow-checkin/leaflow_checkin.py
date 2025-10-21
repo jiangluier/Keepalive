@@ -547,7 +547,7 @@ class MultiAccountManager:
                 # 隐藏邮箱部分字符以保护隐私
                 masked_email = email[:3] + "***" + email[email.find("@"):]
                 message += f"{status} 账号 {masked_email}:\n"
-                message += f"{result}\n💰 当前总余额：{balance}\n"
+                message += f"{result}\n💰 当前总余额：{balance}\n\n"
             
             url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
             data = {
@@ -617,3 +617,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
