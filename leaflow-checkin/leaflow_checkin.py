@@ -13,6 +13,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import TimeoutException
 import requests
 from datetime import datetime
 
@@ -429,8 +430,6 @@ class LeaflowAutoCheckin:
                 # 签到
                 result = self.checkin()
                 logger.info(f"📋 签到结果: {result}")
-                return True, result
-                
                 # 获取余额
                 balance = self.get_balance()
                 logger.info(f"📋 签到结果: {result}, 💰 余额: {balance}")
@@ -524,9 +523,9 @@ class MultiAccountManager:
         
         try:
             SUCCESS_MSG = "⏳ 今日已手动签到"
-            script_success_count = sum(1 for _, success, result in results if success and result != SUCCESS_MSG)  # 脚本签到的账号数量
-            already_checked_count = sum(1 for _, _, result in results if result == SUCCESS_MSG)  # 手动签到的账号数量
-            failure_count = sum(1 for _, success, _ in results if not success)  # 签到失败的账号数量
+            script_success_count = sum(1 for _, success, result, _ in results if success and result != SUCCESS_MSG)  # 脚本签到的账号数量
+            already_checked_count = sum(1 for _, _, result, _ in results if result == SUCCESS_MSG)  # 手动签到的账号数量
+            failure_count = sum(1 for _, success, _, _ in results if not success)  # 签到失败的账号数量
             total_success_count = already_checked_count + script_success_count  # 签到成功的账号数量 (含已手动签到)
             total_count = len(results)  # 账号总数量
 
@@ -595,7 +594,7 @@ class MultiAccountManager:
         self.send_notification(results)
         
         # 返回总体结果
-        success_count = sum(1 for _, success, _ in results if success)
+        success_count = sum(1 for _, success, _, _ in results if success)
         return success_count == len(self.accounts), results
 
 def main():
@@ -603,12 +602,12 @@ def main():
     try:
         manager = MultiAccountManager()
         overall_success, detailed_results = manager.run_all()
+        success_count = sum(1 for _, success, _, _ in detailed_results if success)
         
         if overall_success:
             logger.info("✅ 所有账号签到成功")
             exit(0)
         else:
-            success_count = sum(1 for _, success, _ in detailed_results if success)
             logger.warning(f"⚠️ 部分账号签到失败: {success_count}/{len(detailed_results)} 成功")
             exit(0)
             
