@@ -26,7 +26,7 @@ Databricks部署节点视频教程：https://youtu.be/r35kK77PlLg
 
 #### 方法一：修改代码中的默认配置（推荐用于测试）
 
-在 [_worker.js](file:///c%3A/Users/Mr.wang/Desktop/Databricks-keepalive-workers-main/_worker.js) 文件中找到 `DEFAULT_CONFIG` 对象并修改：
+在 [_worker.js](https://github.com/yutian81/Keepalive/blob/main/databricks-alive/_worker.js) 文件中找到 `DEFAULT_CONFIG` 对象并修改：
 
 #### 方法二：使用环境变量（推荐用于生产环境）
 
@@ -89,3 +89,18 @@ Databricks部署节点视频教程：https://youtu.be/r35kK77PlLg
 1. 检查 Cron Trigger 配置是否正确
 2. 确认 Worker 已正确部署
 3. 查看 Worker 日志确认定时任务是否被触发
+
+## Uptime Kuma 配置
+
+### 监控配置
+
+- 监控类型：`HTTP(S)-关键字`
+- 监控地址：`https://本项目worker地址/status`
+- 关键字: `"success":true`
+
+### 通知保活
+
+- 通知类型：`webhook`
+- 显示名称：`databricks离线`
+- POST URL：`https://本项目worker地址/start`
+- 请求体：`预设-application/json`
