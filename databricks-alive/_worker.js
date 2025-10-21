@@ -2,16 +2,16 @@
 const DEFAULT_CONFIG = {
   DATABRICKS_HOST: 'https://abc-1223456789.cloud.databricks.com',    // (必填)直接在单引号内填写工作区host或添加环境变量,变量名：DATABRICKS_HOST
   DATABRICKS_TOKEN: '',        // (必填)直接在单引号内填写token或添加环境变量,变量名：DATABRICKS_TOKEN
-  CHAT_ID: '',                                                       // 直接在单引号内填写Telegram聊天或添加环境变量CHAT_ID,须同时填写BOT_TOKEN(可选配置)
-  BOT_TOKEN: ''                                                      // 直接在单引号内填写Telegram机器人或添加环境变量,须同时填写CHAT_ID
+  CHAT_ID: '',                                                       // 直接在单引号内填写Telegram聊天或添加环境变量TG_CHAT_ID,须同时填写TG_BOT_TOKEN(可选配置)
+  BOT_TOKEN: ''                                                      // 直接在单引号内填写Telegram机器人或添加环境变量,须同时填写TG_CHAT_ID
 };
 
 // 获取配置
 function getConfig(env) {
   const host = env.DATABRICKS_HOST || DEFAULT_CONFIG.DATABRICKS_HOST;
   const token = env.DATABRICKS_TOKEN || DEFAULT_CONFIG.DATABRICKS_TOKEN;
-  const chatId = env.CHAT_ID || DEFAULT_CONFIG.CHAT_ID;
-  const botToken = env.BOT_TOKEN || DEFAULT_CONFIG.BOT_TOKEN;
+  const chatId = env.TG_CHAT_ID || DEFAULT_CONFIG.CHAT_ID;
+  const botToken = env.TG_BOT_TOKEN || DEFAULT_CONFIG.BOT_TOKEN;
   
   return {
     DATABRICKS_HOST: host,
@@ -21,8 +21,8 @@ function getConfig(env) {
     source: {
       host: env.DATABRICKS_HOST ? '环境变量' : '默认值',
       token: env.DATABRICKS_TOKEN ? '环境变量' : '默认值',
-      chatId: env.CHAT_ID ? '环境变量' : '默认值',
-      botToken: env.BOT_TOKEN ? '环境变量' : '默认值'
+      chatId: env.TG_CHAT_ID ? '环境变量' : '默认值',
+      botToken: env.TG_BOT_TOKEN ? '环境变量' : '默认值'
     }
   };
 }
