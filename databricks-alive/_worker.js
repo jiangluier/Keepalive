@@ -336,12 +336,66 @@ function getFrontendHTML() {
     <style>
         /* 保持之前的样式不变 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: white; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
-        .header { background: linear-gradient(135deg, #2c3e50, #34495e); color: white; padding: 30px; text-align: center; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: url('https://pan.811520.xyz/icon/bg_light.webp') no-repeat center/cover; padding: 20px; }
+        .container {
+          max-width: 1200px;
+          margin: 0 auto;
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 12px;
+          box-shadow: 5px 10px 20px rgba(0, 0, 0, 0.2);
+          overflow: hidden;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
+        .header {
+          background: rgba(0, 0, 0, 0.5);
+          color: white;
+          padding: 30px;
+          text-align: center;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
         .header h1 { font-size: 2.5em; margin-bottom: 10px; }
         .header p { opacity: 0.9; font-size: 1.1em; }
-        .controls { padding: 25px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
+        .controls {
+          padding: 25px;
+          margin: 0 25px;
+          background: rgba(255, 255, 255, 0.3);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+          display: flex;
+          gap: 15px;
+          flex-wrap: wrap;
+          align-items: center;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          box-shadow: 5px 0 15px rgba(0, 0, 0, 0.15);
+          border-radius: 8px 8px 0 0;
+        }
+        .stats {
+          display: grid;
+          grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+          gap: 20px;
+          padding: 25px;
+          margin: 0 25px;
+          background: rgba(255, 255, 255, 0.3);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
+          border-radius: 0 0 8px 8px;
+        }
+        .stat-card {
+          background: rgba(255, 255, 255, 0.3);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          padding: 20px;
+          border-radius: 10px;
+          /* box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15); */
+          text-align: center;
+          border-left: 4px solid #007bff;
+        }
+        .stat-number { font-size: 2.5em; font-weight: bold; color: #2c3e50; }
+        .stat-label { color: #6c757d; font-size: 0.9em; margin-top: 5px; }
         .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px; }
         .btn-primary { background: #007bff; color: white; }
         .btn-primary:hover { background: #0056b3; transform: translateY(-2px); }
@@ -350,15 +404,25 @@ function getFrontendHTML() {
         .btn-info { background: #17a2b8; color: white; }
         .btn-info:hover { background: #138496; transform: translateY(-2px); }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; padding: 25px; background: white; }
-        .stat-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; border-left: 5px solid #007bff; }
-        .stat-number { font-size: 2.5em; font-weight: bold; color: #2c3e50; }
-        .stat-label { color: #6c757d; font-size: 0.9em; margin-top: 5px; }
         .apps-list { padding: 25px; }
-        .apps-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .apps-table {
+          width: 100%;
+          border-collapse: collapse;
+          background: rgba(255, 255, 255, 0.35);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
+        }
         .apps-table th, .apps-table td { padding: 15px; text-align: left; border-bottom: 1px solid #e9ecef; }
-        .apps-table th { background: #f8f9fa; font-weight: 600; color: #2c3e50; }
-        .apps-table tr:hover { background: #f8f9fa; }
+        .apps-table th {
+          background: rgba(255, 255, 255, 0.3);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          font-weight: 600;
+          color: #2c3e50;
+        }
         .state-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }
         .state-active { background: #d4edda; color: #155724; }
         .state-stopped { background: #f8d7da; color: #721c24; }
@@ -367,14 +431,49 @@ function getFrontendHTML() {
         .error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin: 20px 0; }
         .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin: 20px 25px; }
         .last-updated { text-align: center; padding: 15px; color: #6c757d; font-size: 0.9em; border-top: 1px solid #e9ecef; }
-        .routes-info { background: #f8f9fa; padding: 25px; margin-top: 10px; border-radius: 8px; }
+        .routes-info {
+          background: rgba(255, 255, 255, 0.35);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          padding: 25px;
+          margin: 10px 25px 0 25px;
+          border-radius: 8px;
+          box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
+        }
         .routes-info h3 { margin-bottom: 25px; color: #2c3e50; }
-        .route-item { background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #007bff; flex: 1 1 calc(50% - 20px); box-sizing: border-box; }
+        .route-item {
+          background: rgba(255, 255, 255, 0.4);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          padding: 15px;
+          border-radius: 6px;
+          border-left: 4px solid #007bff;
+          flex: 1 1 calc(50% - 20px);
+          box-sizing: border-box;
+          /* box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15); */
+        }
         .routes-grid { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 10px; }
-        .footer-links { display: flex; justify-content: center; gap: 20px; padding: 20px; background: #2c3e50; }
+        .footer-links {
+          display: flex;
+          justify-content: center;
+          gap: 20px;
+          padding: 20px;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
         .footer-links a { color: white; text-decoration: none; font-weight: 500; transition: color 0.3s ease; display: flex; align-items: center; gap: 8px; }
         .footer-links a:hover { color: #4da8ff; }
-        .notification-status { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 15px 25px; border-left: 4px solid #007bff; }
+        .notification-status {
+          background: rgba(255, 255, 255, 0.3);
+          padding: 15px;
+          border-radius: 8px;
+          margin: 15px 25px;
+          border-left: 4px solid #007bff;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
+        }
         img.emoji { height: 1em; width: 1em; margin: 0 .05em 0 .1em; vertical-align: -0.1em; }
         @media (max-width: 768px) {
             .controls { flex-direction: column; align-items: stretch; }
