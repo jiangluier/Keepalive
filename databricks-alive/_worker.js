@@ -1,7 +1,7 @@
 // 环境变量优先，没有则使用代码里填写的
 const DEFAULT_CONFIG = {
   DATABRICKS_HOST: 'https://abc-1223456789.cloud.databricks.com',    // (必填)直接在单引号内填写工作区host或添加环境变量,变量名：DATABRICKS_HOST
-  DATABRICKS_TOKEN: '',        // (必填)直接在单引号内填写token或添加环境变量,变量名：DATABRICKS_TOKEN
+  DATABRICKS_TOKEN: '',                                              // (必填)直接在单引号内填写token或添加环境变量,变量名：DATABRICKS_TOKEN
   CHAT_ID: '',                                                       // 直接在单引号内填写Telegram聊天或添加环境变量TG_CHAT_ID,须同时填写TG_BOT_TOKEN(可选配置)
   BOT_TOKEN: ''                                                      // 直接在单引号内填写Telegram机器人或添加环境变量,须同时填写TG_CHAT_ID
 };
@@ -331,6 +331,7 @@ function getFrontendHTML() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="https://ui-assets.cloud.databricks.com/favicon.ico">
     <title>Databricks Apps 监控面板</title>
     <style>
         /* 保持之前的样式不变 */
@@ -372,7 +373,7 @@ function getFrontendHTML() {
         .footer-links { display: flex; justify-content: center; gap: 20px; padding: 20px; background: #2c3e50; margin-top: 30px; }
         .footer-links a { color: white; text-decoration: none; font-weight: 500; transition: color 0.3s ease; display: flex; align-items: center; gap: 8px; }
         .footer-links a:hover { color: #4da8ff; }
-        .notification-status { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #007bff; }
+        .notification-status { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 15px 25px; border-left: 4px solid #007bff; }
         @media (max-width: 768px) {
             .controls { flex-direction: column; align-items: stretch; }
             .btn { justify-content: center; }
