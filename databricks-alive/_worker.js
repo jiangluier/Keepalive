@@ -336,7 +336,7 @@ function getFrontendHTML() {
     <style>
         /* 保持之前的样式不变 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: white: 100vh; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: white; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
         .header { background: linear-gradient(135deg, #2c3e50, #34495e); color: white; padding: 30px; text-align: center; }
         .header h1 { font-size: 2.5em; margin-bottom: 10px; }
@@ -365,20 +365,23 @@ function getFrontendHTML() {
         .state-unknown { background: #fff3cd; color: #856404; }
         .loading { text-align: center; padding: 40px; color: #6c757d; }
         .error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin: 20px 25px; }
         .last-updated { text-align: center; padding: 15px; color: #6c757d; font-size: 0.9em; border-top: 1px solid #e9ecef; }
-        .routes-info { background: #f8f9fa; padding: 25px; margin-top: 30px; border-radius: 8px; }
-        .routes-info h3 { margin-bottom: 15px; color: #2c3e50; }
-        .route-item { background: white; padding: 15px; margin: 10px 0; border-radius: 6px; border-left: 4px solid #007bff; }
-        .footer-links { display: flex; justify-content: center; gap: 20px; padding: 20px; background: #2c3e50; margin-top: 30px; }
+        .routes-info { background: #f8f9fa; padding: 25px; margin-top: 10px; border-radius: 8px; }
+        .routes-info h3 { margin-bottom: 25px; color: #2c3e50; }
+        .route-item { background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #007bff; flex: 1 1 calc(50% - 20px); box-sizing: border-box; }
+        .routes-grid { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 10px; }
+        .footer-links { display: flex; justify-content: center; gap: 20px; padding: 20px; background: #2c3e50; }
         .footer-links a { color: white; text-decoration: none; font-weight: 500; transition: color 0.3s ease; display: flex; align-items: center; gap: 8px; }
         .footer-links a:hover { color: #4da8ff; }
         .notification-status { background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 15px 25px; border-left: 4px solid #007bff; }
+        img.emoji { height: 1em; width: 1em; margin: 0 .05em 0 .1em; vertical-align: -0.1em; }
         @media (max-width: 768px) {
             .controls { flex-direction: column; align-items: stretch; }
             .btn { justify-content: center; }
             .apps-table { font-size: 0.9em; }
             .apps-table th, .apps-table td { padding: 10px 8px; }
+            .route-item { flex: 1 1 100%; }
             .footer-links { flex-direction: column; align-items: center; gap: 15px; }
         }
     </style>
@@ -386,7 +389,7 @@ function getFrontendHTML() {
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚀 Databricks Apps 监控面板</h1>
+            <h1>👋 Databricks Apps 监控面板</h1>
             <p>实时监控和管理你的 Databricks Apps</p>
         </div>
         
@@ -421,19 +424,17 @@ function getFrontendHTML() {
                 <div class="loading">加载 Apps 列表...</div>
             </div>
         </div>
-        
-        <div class="last-updated">
-            最后更新: <span id="updateTime">-</span>
-        </div>
-        
+
         <div class="routes-info">
-            <h3>📚 API 路由说明</h3>
-            <div class="route-item"><strong>GET /</strong> - 显示此管理界面</div>
-            <div class="route-item"><strong>GET /status</strong> - 获取当前所有 Apps 的状态</div>
-            <div class="route-item"><strong>GET /check</strong> - 检查并自动启动停止的 Apps</div>
-            <div class="route-item"><strong>POST /start</strong> - 手动启动所有停止的 Apps</div>
-            <div class="route-item"><strong>GET /config</strong> - 查看当前配置信息</div>
-            <div class="route-item"><strong>POST /test-notification</strong> - 测试 Telegram 通知</div>
+          <h3>📚 API 路由说明</h3>
+          <div class="routes-grid">
+              <div class="route-item"><strong>GET /</strong> - 显示此管理界面</div>
+              <div class="route-item"><strong>GET /status</strong> - 获取当前所有 Apps 的状态</div>
+              <div class="route-item"><strong>GET /check</strong> - 检查并自动启动停止的 Apps</div>
+              <div class="route-item"><strong>POST /start</strong> - 手动启动所有停止的 Apps</div>
+              <div class="route-item"><strong>GET /config</strong> - 查看当前配置信息</div>
+              <div class="route-item"><strong>POST /test-notification</strong> - 测试 Telegram 通知</div>
+          </div>
         </div>
         
         <div class="footer-links">
@@ -458,6 +459,7 @@ function getFrontendHTML() {
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
     <script>
         let currentData = null;
         
@@ -465,6 +467,7 @@ function getFrontendHTML() {
         document.addEventListener('DOMContentLoaded', function() {
             refreshStatus();
             checkTelegramStatus();
+            twemoji.parse(document.body, { folder: 'svg', ext: '.svg' });
         });
         
         // 检查 Telegram 状态
@@ -483,6 +486,7 @@ function getFrontendHTML() {
                 } else {
                     statusEl.innerHTML = '<span style="color: #dc3545;">❌ 基础配置缺失</span>';
                 }
+                twemoji.parse(statusEl, { folder: 'svg', ext: '.svg' });
             } catch (error) {
                 document.getElementById('telegramStatus').innerHTML = '<span style="color: #dc3545;">❌ 检查失败</span>';
             }
@@ -514,6 +518,7 @@ function getFrontendHTML() {
             messageEl.className = type === 'error' ? 'error' : 'success';
             messageEl.textContent = message;
             container.appendChild(messageEl);
+            twemoji.parse(messageEl, { folder: 'svg', ext: '.svg' });
             
             // 3秒后自动移除
             setTimeout(() => {
@@ -610,21 +615,22 @@ function getFrontendHTML() {
             container.innerHTML = \`
                 <div class="stat-card">
                     <div class="stat-number">\${summary.total}</div>
-                    <div class="stat-label">总 Apps 数量</div>
+                    <div class="stat-label">📦 Apps 数量</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number" style="color: #28a745;">\${summary.active}</div>
-                    <div class="stat-label">运行中</div>
+                    <div class="stat-label">🟢 运行中</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number" style="color: #dc3545;">\${summary.stopped}</div>
-                    <div class="stat-label">已停止</div>
+                    <div class="stat-label">🔴 已停止</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number" style="color: #ffc107;">\${summary.unknown}</div>
-                    <div class="stat-label">状态未知</div>
+                    <div class="stat-label">⚠️ 状态未知</div>
                 </div>
             \`;
+            twemoji.parse(container, { folder: 'svg', ext: '.svg' });
         }
         
         // 更新 Apps 列表
@@ -634,6 +640,7 @@ function getFrontendHTML() {
             
             if (apps.length === 0) {
                 container.innerHTML = '<div class="loading">没有找到任何 Apps</div>';
+                twemoji.parse(container, { folder: 'svg', ext: '.svg' });
                 return;
             }
             
@@ -641,10 +648,10 @@ function getFrontendHTML() {
                 <table class="apps-table">
                     <thead>
                         <tr>
-                            <th>App 名称</th>
-                            <th>状态</th>
-                            <th>App ID</th>
-                            <th>创建时间</th>
+                            <th>📦 App 名称</th>
+                            <th>📊 状态</th>
+                            <th>🆔 App ID</th>
+                            <th>🕒 创建时间</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -653,7 +660,21 @@ function getFrontendHTML() {
             apps.forEach(app => {
                 const stateClass = \`state-\${app.state.toLowerCase()}\`;
                 const createDate = app.createdAt ? new Date(app.createdAt).toLocaleString() : '未知';
-                
+
+                // 根据状态显示不同的 emoji
+                let stateEmoji = '';
+                switch (app.state.toLowerCase()) {
+                    case 'active':
+                        stateEmoji = '🟢';
+                        break;
+                    case 'stopped':
+                        stateEmoji = '🔴';
+                        break;
+                    default:
+                        stateEmoji = '⚠️';
+                        break;
+                }                
+
                 html += \`
                     <tr>
                         <td><strong>\${app.name}</strong></td>
@@ -670,13 +691,17 @@ function getFrontendHTML() {
             
             html += '</tbody></table>';
             container.innerHTML = html;
+            twemoji.parse(container, { folder: 'svg', ext: '.svg' });
         }
         
-        // 更新最后更新时间
+        // 最后更新时间
         function updateLastUpdated() {
             const now = new Date();
-            document.getElementById('updateTime').textContent = now.toLocaleString();
-            document.getElementById('lastUpdated').textContent = '最后更新: ' + now.toLocaleTimeString();
+            const lastUpdatedElement = document.getElementById('lastUpdated');
+            if (lastUpdatedElement) {
+                lastUpdatedElement.textContent = '🕒 最后更新: ' + now.toLocaleString();
+                twemoji.parse(lastUpdatedElement, { folder: 'svg', ext: '.svg' });
+            }
         }
         
         // 每60分钟自动刷新一次
