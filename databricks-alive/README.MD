@@ -34,8 +34,8 @@ Databricks部署节点视频教程：https://youtu.be/r35kK77PlLg
 
 - `DATABRICKS_HOST`: Databricks 工作区地址
 - `DATABRICKS_TOKEN`: Databricks 访问令牌
-- `CHAT_ID`: Telegram 聊天 ID（可选）
-- `BOT_TOKEN`: Telegram Bot 令牌（可选）
+- `TG_CHAT_ID`: Telegram 聊天 ID（可选）
+- `TG_BOT_TOKEN`: Telegram Bot 令牌（可选）
 
 ### 3. 部署到 Cloudflare Workers
 
