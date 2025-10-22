@@ -447,7 +447,7 @@ function getFrontendHTML() {
           -webkit-backdrop-filter: blur(10px);
         }
         .header {
-          background: rgba(0, 0, 0, 0.5);
+          background: rgba(0, 0, 0, 0.6);
           color: white;
           padding: 30px;
           text-align: center;
@@ -579,7 +579,7 @@ function getFrontendHTML() {
           justify-content: center;
           gap: 20px;
           padding: 20px;
-          background: rgba(0, 0, 0, 0.5);
+          background: rgba(0, 0, 0, 0.6);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
         }
