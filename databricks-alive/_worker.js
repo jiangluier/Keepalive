@@ -1,37 +1,80 @@
 // 环境变量优先，没有则使用代码里填写的
 const DEFAULT_CONFIG = {
+  ARGO_DOMAIN: 'databricks.argo.dmain.com',                          // (必填)填写自己的隧道域名
   DATABRICKS_HOST: 'https://abc-1223456789.cloud.databricks.com',    // (必填)直接在单引号内填写工作区host或添加环境变量,变量名：DATABRICKS_HOST
-  DATABRICKS_TOKEN: '',                                              // (必填)直接在单引号内填写token或添加环境变量,变量名：DATABRICKS_TOKEN
-  CHAT_ID: '',                                                       // 直接在单引号内填写Telegram聊天或添加环境变量TG_CHAT_ID,须同时填写TG_BOT_TOKEN(可选配置)
-  BOT_TOKEN: ''                                                      // 直接在单引号内填写Telegram机器人或添加环境变量,须同时填写TG_CHAT_ID
+  DATABRICKS_TOKEN: 'dapi6dae4632d66931ecdeefexxxxxxxxxxxxx',        // (必填)直接在单引号内填写token或添加环境变量,变量名：DATABRICKS_TOKEN
+  CHAT_ID: '',                                                       // 直接在单引号内填写Telegram聊天或添加环境变量CHAT_ID,须同时填写BOT_TOKEN(可选配置)
+  BOT_TOKEN: ''                                                      // 直接在单引号内填写Telegram机器人或添加环境变量,须同时填写CHAT_ID
 };
 
 // 获取配置
 function getConfig(env) {
   const host = env.DATABRICKS_HOST || DEFAULT_CONFIG.DATABRICKS_HOST;
   const token = env.DATABRICKS_TOKEN || DEFAULT_CONFIG.DATABRICKS_TOKEN;
-  const chatId = env.TG_CHAT_ID || DEFAULT_CONFIG.CHAT_ID;
-  const botToken = env.TG_BOT_TOKEN || DEFAULT_CONFIG.BOT_TOKEN;
+  const chatId = env.CHAT_ID || DEFAULT_CONFIG.CHAT_ID;
+  const botToken = env.BOT_TOKEN || DEFAULT_CONFIG.BOT_TOKEN;
+  const argoDomain = env.ARGO_DOMAIN || DEFAULT_CONFIG.ARGO_DOMAIN;
   
   return {
     DATABRICKS_HOST: host,
     DATABRICKS_TOKEN: token,
     CHAT_ID: chatId,
     BOT_TOKEN: botToken,
+    ARGO_DOMAIN: argoDomain,
     source: {
       host: env.DATABRICKS_HOST ? '环境变量' : '默认值',
       token: env.DATABRICKS_TOKEN ? '环境变量' : '默认值',
-      chatId: env.TG_CHAT_ID ? '环境变量' : '默认值',
-      botToken: env.TG_BOT_TOKEN ? '环境变量' : '默认值'
+      chatId: env.CHAT_ID ? '环境变量' : '默认值',
+      botToken: env.BOT_TOKEN ? '环境变量' : '默认值',
+      argoDomain: env.ARGO_DOMAIN ? '环境变量' : '默认值'
     }
   };
+}
+
+// 存储上次 ARGO 状态
+let lastArgoStatus = null;
+
+// 检查 ARGO 域名状态
+async function checkArgoDomain(argoDomain) {
+  try {
+    const response = await fetch(`https://${argoDomain}`, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Databricks-Monitor/1.0'
+      }
+    });
+    
+    const statusCode = response.status;
+    console.log(`ARGO域名 ${argoDomain} 状态码: ${statusCode}`);
+    
+    return {
+      online: statusCode === 404,
+      statusCode: statusCode,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error(`检查 ARGO域名 ${argoDomain} 时出错:`, error);
+    return {
+      online: false,
+      statusCode: null,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+// 检查 ARGO 状态是否有变化
+function hasArgoStatusChanged(newStatus) {
+  if (!lastArgoStatus) return true;
+  
+  return lastArgoStatus.online !== newStatus.online || 
+         lastArgoStatus.statusCode !== newStatus.statusCode;
 }
 
 // 发送 Telegram 通知
 async function sendTelegramNotification(config, message) {
   const { CHAT_ID, BOT_TOKEN } = config;
   
-  // 检查是否配置了 Telegram
   if (!CHAT_ID || !BOT_TOKEN) {
     console.log('Telegram 通知未配置，跳过发送');
     return false;
@@ -67,13 +110,24 @@ async function sendTelegramNotification(config, message) {
   }
 }
 
-// 发送离线通知
-async function sendOfflineNotification(config, appName, appId) {
-  const message = `🔴 <b>Databricks App 离线</b>\n\n` +
-                 `📱 App: <code>${appName}</code>\n` +
-                 `🆔 ID: <code>${appId}</code>\n` +
+// 发送 ARGO 离线通知
+async function sendArgoOfflineNotification(config, argoStatus) {
+  const message = `🔴 <b>ARGO 隧道离线</b>\n\n` +
+                 `🌐 域名: <code>${config.ARGO_DOMAIN}</code>\n` +
+                 `📊 状态码: <code>${argoStatus.statusCode || '连接失败'}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
-                 `⚡ 系统正在尝试自动重启...`;
+                 `🔍 正在检查 Databricks App 状态...`;
+  
+  return await sendTelegramNotification(config, message);
+}
+
+// 发送 ARGO 恢复通知
+async function sendArgoRecoveryNotification(config) {
+  const message = `✅ <b>ARGO 隧道恢复</b>\n\n` +
+                 `🌐 域名: <code>${config.ARGO_DOMAIN}</code>\n` +
+                 `📊 状态: <code>404 (正常)</code>\n` +
+                 `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
+                 `🎉 节点已恢复正常`;
   
   return await sendTelegramNotification(config, message);
 }
@@ -83,8 +137,9 @@ async function sendStartSuccessNotification(config, appName, appId) {
   const message = `✅ <b>Databricks App 启动成功</b>\n\n` +
                  `📱 App: <code>${appName}</code>\n` +
                  `🆔 ID: <code>${appId}</code>\n` +
+                 `🌐 ARGO: <code>${config.ARGO_DOMAIN}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
-                 `🎉 App 正在启动中,过10分钟后再检查节点`;
+                 `🎉 App 正在启动中,请等待argo恢复后再检查节点`;
   
   return await sendTelegramNotification(config, message);
 }
@@ -94,6 +149,7 @@ async function sendStartFailedNotification(config, appName, appId, error) {
   const message = `❌ <b>Databricks App 启动失败</b>\n\n` +
                  `📱 App: <code>${appName}</code>\n` +
                  `🆔 ID: <code>${appId}</code>\n` +
+                 `🌐 ARGO: <code>${config.ARGO_DOMAIN}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n` +
                  `💥 错误: <code>${error}</code>\n\n` +
                  `🔧 请检查 App 配置或手动访问 域名/start 启动`;
@@ -111,6 +167,7 @@ async function sendManualOperationNotification(config, operation, results) {
                  `✅ 成功启动: ${successCount} 个\n` +
                  `❌ 启动失败: ${failedCount} 个\n` +
                  `⏸️ 停止状态: ${stoppedCount} 个\n` +
+                 `🌐 ARGO域名: <code>${config.ARGO_DOMAIN}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}`;
   
   return await sendTelegramNotification(config, message);
@@ -183,8 +240,43 @@ async function getAppsStatus(config) {
   }
 }
 
-// 检查并启动 Apps（定时任务使用）
-async function checkAndStartApps(config) {
+// 智能检查：只在 ARGO 状态变化时调用 Databricks API
+async function smartCheckAndStartApps(config) {
+  console.log(`检查 ARGO 域名: ${config.ARGO_DOMAIN}`);
+  const currentArgoStatus = await checkArgoDomain(config.ARGO_DOMAIN);
+  
+  // 检查 ARGO 状态是否有变化
+  const statusChanged = hasArgoStatusChanged(currentArgoStatus);
+  
+  if (currentArgoStatus.online) {
+    console.log(`✅ ARGO 域名 ${config.ARGO_DOMAIN} 状态正常 (404)`);
+    
+    // 如果状态从离线变为在线，发送恢复通知
+    if (statusChanged && lastArgoStatus && !lastArgoStatus.online) {
+      console.log('ARGO 状态从离线恢复为在线，发送恢复通知');
+      await sendArgoRecoveryNotification(config);
+    }
+    
+    // 更新上次状态
+    lastArgoStatus = currentArgoStatus;
+    
+    return {
+      argoStatus: 'online',
+      statusChanged: statusChanged,
+      message: 'ARGO 隧道运行正常',
+      timestamp: new Date().toISOString()
+    };
+  }
+  
+  console.log(`🔴 ARGO 域名 ${config.ARGO_DOMAIN} 离线，状态码: ${currentArgoStatus.statusCode}`);
+  
+  // 如果 ARGO 状态变化为离线，发送通知并检查 Databricks
+  if (statusChanged) {
+    console.log('ARGO 状态变化为离线，发送通知并检查 Databricks Apps');
+    await sendArgoOfflineNotification(config, currentArgoStatus);
+  }
+  
+  // ARGO 离线，检查 Databricks Apps
   const apps = await getAppsList(config);
   const results = [];
   
@@ -193,13 +285,21 @@ async function checkAndStartApps(config) {
     results.push(result);
   }
   
-  // 注意：定时检查不发送批量通知，只发送单个App的离线/启动通知
-  console.log(`定时检查完成，共处理 ${results.length} 个 Apps`);
+  console.log(`ARGO 离线检查完成，共处理 ${results.length} 个 Apps`);
   
-  return results;
+  // 更新上次状态
+  lastArgoStatus = currentArgoStatus;
+  
+  return {
+    argoStatus: 'offline',
+    statusChanged: statusChanged,
+    argoDetails: currentArgoStatus,
+    results: results,
+    timestamp: new Date().toISOString()
+  };
 }
 
-// 启动停止的 Apps（手动操作使用）
+// 启动停止的 Apps
 async function startStoppedApps(config) {
   const apps = await getAppsList(config);
   const stoppedApps = apps.filter(app => (app.compute_status?.state || 'UNKNOWN') === 'STOPPED');
@@ -212,7 +312,6 @@ async function startStoppedApps(config) {
     results.push(result);
   }
   
-  // 手动操作发送汇总通知
   if (stoppedApps.length > 0) {
     await sendManualOperationNotification(config, '手动启动', results);
   }
@@ -231,7 +330,6 @@ async function processApp(app, config) {
   if (computeState === 'STOPPED') {
     console.log(`⚡ 启动停止的 App: ${appName}`);
     
-    // 发送离线通知
     await sendOfflineNotification(config, appName, appId);
     
     return await startSingleApp(app, config);
@@ -274,7 +372,6 @@ async function startSingleApp(app, config) {
     if (startResponse.ok) {
       console.log(`✅ App ${appName} 启动成功`);
       
-      // 发送启动成功通知
       await sendStartSuccessNotification(config, appName, appId);
       
       return { 
@@ -296,7 +393,6 @@ async function startSingleApp(app, config) {
       
       const errorMessage = errorDetails.message || '未知错误';
       
-      // 发送启动失败通知
       await sendStartFailedNotification(config, appName, appId, errorMessage);
       
       return { 
@@ -310,7 +406,6 @@ async function startSingleApp(app, config) {
   } catch (error) {
     console.error(`❌ App ${appName} 启动请求错误:`, error);
     
-    // 发送启动失败通知
     await sendStartFailedNotification(config, appName, appId, error.message);
     
     return { 
@@ -323,7 +418,7 @@ async function startSingleApp(app, config) {
   }
 }
 
-// 前端 HTML（保持不变）
+// 前端 HTML
 function getFrontendHTML() {
   return `
 <!DOCTYPE html>
@@ -336,7 +431,11 @@ function getFrontendHTML() {
     <style>
         /* 保持之前的样式不变 */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: url('https://pan.811520.xyz/icon/bg_light.webp') no-repeat center/cover; padding: 20px; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: url('https://pan.811520.xyz/icon/bg_light.webp') no-repeat center/cover;
+          padding: 20px;
+        }
         .container {
           max-width: 1200px;
           margin: 0 auto;
@@ -372,6 +471,24 @@ function getFrontendHTML() {
           box-shadow: 5px 0 15px rgba(0, 0, 0, 0.15);
           border-radius: 8px 8px 0 0;
         }
+        .status-panel { padding: 25px; }
+        .status-card {
+          background: rgba(255, 255, 255, 0.3);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          padding: 20px;
+          border-radius: 8px;
+          box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
+          margin-bottom: 20px;
+          border-left: 4px solid #007bff;
+        }
+        .status-card.argo-online { border-left-color: #28a745; }
+        .status-card.argo-offline { border-left-color: #dc3545; }
+        .status-title { font-size: 1.2em; font-weight: bold; margin-bottom: 15px; color: #2c3e50; }
+        .status-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .status-item { padding: 10px; background: #f8f9fa; border-radius: 6px; }
+        .status-label { font-size: 0.9em; color: #6c757d; }
+        .status-value { font-size: 1.1em; font-weight: bold; margin-top: 5px; }        
         .stats {
           display: grid;
           grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
@@ -389,21 +506,18 @@ function getFrontendHTML() {
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           padding: 20px;
-          border-radius: 10px;
-          /* box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15); */
+          border-radius: 8px;
           text-align: center;
           border-left: 4px solid #007bff;
         }
         .stat-number { font-size: 2.5em; font-weight: bold; color: #2c3e50; }
         .stat-label { color: #6c757d; font-size: 0.9em; margin-top: 5px; }
-        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px; }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
         .btn-primary { background: #007bff; color: white; }
-        .btn-primary:hover { background: #0056b3; transform: translateY(-2px); }
         .btn-success { background: #28a745; color: white; }
-        .btn-success:hover { background: #1e7e34; transform: translateY(-2px); }
         .btn-info { background: #17a2b8; color: white; }
-        .btn-info:hover { background: #138496; transform: translateY(-2px); }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+        .btn-warning { background: #ffc107; color: #212529; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .apps-list { padding: 25px; }
         .apps-table {
           width: 100%;
@@ -431,8 +545,16 @@ function getFrontendHTML() {
         .error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin: 20px 0; }
         .success { background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin: 20px 25px; }
         .last-updated { text-align: center; padding: 15px; color: #6c757d; font-size: 0.9em; border-top: 1px solid #e9ecef; }
+        .info-panel {
+          background: rgba(255, 255, 255, 0.30);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          padding: 20px;
+          border-radius: 8px;
+          margin: 20px 0;
+        }
         .routes-info {
-          background: rgba(255, 255, 255, 0.35);
+          background: rgba(255, 255, 255, 0.30);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           padding: 25px;
@@ -442,7 +564,7 @@ function getFrontendHTML() {
         }
         .routes-info h3 { margin-bottom: 25px; color: #2c3e50; }
         .route-item {
-          background: rgba(255, 255, 255, 0.4);
+          background: rgba(255, 255, 255, 0.3);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           padding: 15px;
@@ -450,7 +572,6 @@ function getFrontendHTML() {
           border-left: 4px solid #007bff;
           flex: 1 1 calc(50% - 20px);
           box-sizing: border-box;
-          /* box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15); */
         }
         .routes-grid { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 10px; }
         .footer-links {
@@ -464,16 +585,6 @@ function getFrontendHTML() {
         }
         .footer-links a { color: white; text-decoration: none; font-weight: 500; transition: color 0.3s ease; display: flex; align-items: center; gap: 8px; }
         .footer-links a:hover { color: #4da8ff; }
-        .notification-status {
-          background: rgba(255, 255, 255, 0.3);
-          padding: 15px;
-          border-radius: 8px;
-          margin: 15px 25px;
-          border-left: 4px solid #007bff;
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
-        }
         img.emoji { height: 1em; width: 1em; margin: 0 .05em 0 .1em; vertical-align: -0.1em; }
         @media (max-width: 768px) {
             .controls { flex-direction: column; align-items: stretch; }
@@ -489,38 +600,67 @@ function getFrontendHTML() {
     <div class="container">
         <div class="header">
             <h1>👋 Databricks Apps 监控面板</h1>
-            <p>实时监控和管理你的 Databricks Apps</p>
+            <p>智能监控 - ARGO 状态优先，减少 API 调用</p>
         </div>
-        
-        <div class="notification-status" id="notificationStatus">
-            <strong>📢 通知状态:</strong> 
-            <span id="telegramStatus">检查中...</span>
-            <div style="margin-top: 8px; font-size: 0.9em; color: #666;">
-                🔔 通知策略: 仅在App离线时和启动成功后发送通知，正常定时检查不发送通知
-            </div>
-        </div>
-        
+            
         <div class="controls">
-            <button class="btn btn-primary" onclick="refreshStatus()">🔄 刷新状态</button>
+            <button class="btn btn-primary" onclick="refreshStatus()">🔄 刷新 Databricks 状态</button>
             <button class="btn btn-success" onclick="startStoppedApps()">⚡ 启动停止的 Apps</button>
-            <button class="btn btn-info" onclick="checkAndStart()">🔍 检查并自动启动</button>
-            <button class="btn" onclick="testNotification()" style="background: #6f42c1; color: white;">🔔 测试通知</button>
+            <button class="btn btn-info" onclick="checkAndStart()">🔍 智能检查</button>
+            <button class="btn btn-warning" onclick="testNotification()">🔔 测试 Telegram 通知</button>
             <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
                 <span id="lastUpdated">-</span>
-                <div id="loadingIndicator" style="display: none;">加载中...</div>
+                <div id="loadingIndicator" style="display: none;">⏳ 加载中...</div>
             </div>
         </div>
         
         <div id="messageContainer"></div>
         
         <div class="stats" id="statsContainer">
-            <div class="loading">加载统计数据...</div>
+            <div class="loading">⏳ 加载统计数据...</div>
         </div>
         
         <div class="apps-list">
-            <h2 style="margin-bottom: 20px; color: #2c3e50;">Apps 列表</h2>
+            <h2 style="margin-bottom: 20px; color: #2c3e50;">Databricks Apps 状态</h2>
             <div id="appsContainer">
-                <div class="loading">加载 Apps 列表...</div>
+                <div class="loading">⏳ 加载 Apps 列表...</div>
+            </div>
+        </div>
+
+        <div class="status-panel">
+            <div class="status-card" id="argoStatusCard">
+                <div class="status-title">🚇 ARGO 隧道状态</div>
+                <div class="status-content">
+                    <div class="status-item">
+                        <div class="status-label">🌐 域名</div>
+                        <div class="status-value" id="argoDomain">-</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">📊 状态</div>
+                        <div class="status-value" id="argoStatus">检查中...</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">⚡ 状态码</div>
+                        <div class="status-value" id="argoStatusCode">-</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">🔍 最后检查</div>
+                        <div class="status-value" id="argoLastCheck">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="status-card">
+                <div class="status-title">📊 监控策略</div>
+                <div class="info-panel">
+                    <p><strong>智能检测逻辑:</strong></p>
+                    <ul>
+                        <li>✅ 初始部署时显示 Databricks Apps 真实状态</li>
+                        <li>🔄 监控期间优先检查 ARGO 域名状态</li>
+                        <li>⚡ 仅在 ARGO 状态变化时才调用 Databricks API</li>
+                        <li>📉 大幅减少 API 调用频率，避免限制</li>
+                    </ul>
+                </div>
             </div>
         </div>
 
@@ -569,29 +709,37 @@ function getFrontendHTML() {
             twemoji.parse(document.body, { folder: 'svg', ext: '.svg' });
         });
         
-        // 检查 Telegram 状态
-        async function checkTelegramStatus() {
+        // 检查 ARGO 状态
+        async function checkArgoStatus() {
             try {
-                const response = await fetch('/config');
+                const response = await fetch('/check-argo');
                 const data = await response.json();
                 
-                const statusEl = document.getElementById('telegramStatus');
-                if (data.DATABRICKS_HOST && data.DATABRICKS_TOKEN) {
-                    if (data.CHAT_ID && data.BOT_TOKEN) {
-                        statusEl.innerHTML = '<span style="color: #28a745;">✅ Telegram 通知已配置</span>';
-                    } else {
-                        statusEl.innerHTML = '<span style="color: #ffc107;">⚠️ Telegram 通知未配置</span>';
-                    }
+                document.getElementById('argoDomain').textContent = data.argoDomain || '-';
+                document.getElementById('argoStatusCode').textContent = data.statusCode || '-';
+                document.getElementById('argoLastCheck').textContent = new Date().toLocaleString();
+                
+                const statusCard = document.getElementById('argoStatusCard');
+                const statusEl = document.getElementById('argoStatus');
+                
+                if (data.online) {
+                    statusCard.className = 'status-card argo-online';
+                    statusEl.innerHTML = '<span style="color: #28a745;">✅ 在线 </span>';
                 } else {
-                    statusEl.innerHTML = '<span style="color: #dc3545;">❌ 基础配置缺失</span>';
+                    statusCard.className = 'status-card argo-offline';
+                    if (data.statusCode) {
+                        statusEl.innerHTML = '<span style="color: #dc3545;">🔴 离线 - 状态码: ' + data.statusCode + '</span>';
+                    } else {
+                        statusEl.innerHTML = '<span style="color: #dc3545;">🔴 离线 - 连接失败</span>';
+                    }
                 }
-                twemoji.parse(statusEl, { folder: 'svg', ext: '.svg' });
+                twemoji.parse(document.body, { folder: 'svg', ext: '.svg' });
             } catch (error) {
-                document.getElementById('telegramStatus').innerHTML = '<span style="color: #dc3545;">❌ 检查失败</span>';
+                document.getElementById('argoStatus').innerHTML = '<span style="color: #dc3545;">❌ 检查失败</span>';
             }
         }
-        
-        // 测试通知
+       
+        // 测试 Telegram 通知
         async function testNotification() {
             setLoading(true);
             try {
@@ -599,47 +747,18 @@ function getFrontendHTML() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    showMessage('测试通知发送成功，请检查 Telegram', 'success');
+                    showMessage('✅ 测试通知发送成功，请检查 Telegram', 'success');
                 } else {
-                    showMessage('测试通知发送失败: ' + data.error, 'error');
+                    showMessage('❌ 测试通知发送失败: ' + data.error, 'error');
                 }
             } catch (error) {
-                showMessage('请求失败: ' + error.message, 'error');
+                showMessage('❌ 请求失败: ' + error.message, 'error');
             } finally {
                 setLoading(false);
             }
         }
-        
-        // 显示消息
-        function showMessage(message, type = 'info') {
-            const container = document.getElementById('messageContainer');
-            const messageEl = document.createElement('div');
-            messageEl.className = type === 'error' ? 'error' : 'success';
-            messageEl.textContent = message;
-            container.appendChild(messageEl);
-            twemoji.parse(messageEl, { folder: 'svg', ext: '.svg' });
-            
-            // 3秒后自动移除
-            setTimeout(() => {
-                messageEl.remove();
-            }, 5000);
-        }
-        
-        // 显示加载状态
-        function setLoading(loading) {
-            const indicator = document.getElementById('loadingIndicator');
-            const buttons = document.querySelectorAll('.btn');
-            
-            if (loading) {
-                indicator.style.display = 'block';
-                buttons.forEach(btn => btn.disabled = true);
-            } else {
-                indicator.style.display = 'none';
-                buttons.forEach(btn => btn.disabled = false);
-            }
-        }
-        
-        // 刷新状态
+             
+        // 刷新 Databricks 状态
         async function refreshStatus() {
             setLoading(true);
             try {
@@ -651,12 +770,12 @@ function getFrontendHTML() {
                     updateStats(data.results);
                     updateAppsList(data.results);
                     updateLastUpdated();
-                    showMessage('状态刷新成功', 'success');
+                    showMessage('✅ Databricks 状态刷新成功', 'success');
                 } else {
-                    showMessage('刷新失败: ' + data.error, 'error');
+                    showMessage('❌ 刷新失败: ' + data.error, 'error');
                 }
             } catch (error) {
-                showMessage('请求失败: ' + error.message, 'error');
+                showMessage('❌ 请求失败: ' + error.message, 'error');
             } finally {
                 setLoading(false);
             }
@@ -664,7 +783,7 @@ function getFrontendHTML() {
         
         // 启动停止的 Apps
         async function startStoppedApps() {
-            if (!confirm('确定要启动所有停止的 Apps 吗？')) return;
+            if (!confirm('⚠️ 确定要启动所有停止的 Apps 吗？')) return;
             
             setLoading(true);
             try {
@@ -672,20 +791,19 @@ function getFrontendHTML() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    showMessage('启动操作完成', 'success');
-                    // 刷新状态显示最新结果
+                    showMessage('✅ 启动操作完成', 'success');
                     setTimeout(refreshStatus, 2000);
                 } else {
-                    showMessage('启动失败: ' + data.error, 'error');
+                    showMessage('❌ 启动失败: ' + data.error, 'error');
                 }
             } catch (error) {
-                showMessage('请求失败: ' + error.message, 'error');
+                showMessage('❌ 请求失败: ' + error.message, 'error');
             } finally {
                 setLoading(false);
             }
         }
-        
-        // 检查并自动启动
+
+        // 智能检查
         async function checkAndStart() {
             setLoading(true);
             try {
@@ -693,106 +811,125 @@ function getFrontendHTML() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    showMessage('检查完成', 'success');
-                    // 刷新状态显示最新结果
-                    setTimeout(refreshStatus, 2000);
+                    let message = '✅ 智能检查完成: ' + data.message;
+                    if (data.argoStatus === 'offline' && data.results) {
+                        message += ' (✅ 处理了 ' + data.results.length + ' 个 Apps)';
+                    }
+                    showMessage(message, 'success');
+                    
+                    // 刷新 ARGO 状态
+                    checkArgoStatus();
+                    
+                    // 如果检查了 Databricks，刷新状态显示
+                    if (data.results && data.results.length > 0) {
+                        setTimeout(refreshStatus, 2000);
+                    }
                 } else {
-                    showMessage('检查失败: ' + data.error, 'error');
+                    showMessage('❌ 检查失败: ' + data.error, 'error');
                 }
             } catch (error) {
-                showMessage('请求失败: ' + error.message, 'error');
+                showMessage('❌ 请求失败: ' + error.message, 'error');
             } finally {
                 setLoading(false);
+            }
+        }
+        
+        // 显示消息
+        function showMessage(message, type) {
+            const container = document.getElementById('messageContainer');
+            const messageEl = document.createElement('div');
+            messageEl.className = type === 'error' ? 'error' : 'success';
+            messageEl.textContent = message;
+            container.appendChild(messageEl);
+            setTimeout(function() { messageEl.remove(); }, 5000);
+        }
+        
+        // 显示加载状态
+        function setLoading(loading) {
+            const indicator = document.getElementById('loadingIndicator');
+            const buttons = document.querySelectorAll('.btn');
+            
+            if (loading) {
+                indicator.style.display = 'block';
+                buttons.forEach(function(btn) { btn.disabled = true; });
+            } else {
+                indicator.style.display = 'none';
+                buttons.forEach(function(btn) { btn.disabled = false; });
             }
         }
         
         // 更新统计信息
         function updateStats(data) {
             const container = document.getElementById('statsContainer');
-            const { summary } = data;
+            const summary = data.summary;
             
-            container.innerHTML = \`
-                <div class="stat-card">
-                    <div class="stat-number">\${summary.total}</div>
-                    <div class="stat-label">📦 Apps 数量</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" style="color: #28a745;">\${summary.active}</div>
-                    <div class="stat-label">🟢 运行中</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" style="color: #dc3545;">\${summary.stopped}</div>
-                    <div class="stat-label">🔴 已停止</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" style="color: #ffc107;">\${summary.unknown}</div>
-                    <div class="stat-label">⚠️ 状态未知</div>
-                </div>
-            \`;
+            container.innerHTML = [
+                '<div class="stat-card">',
+                '<div class="stat-number">' + summary.total + '</div>',
+                '<div class="stat-label">📦 Apps 数量</div>',
+                '</div>',
+                '<div class="stat-card">',
+                '<div class="stat-number" style="color: #28a745;">' + summary.active + '</div>',
+                '<div class="stat-label">🟢 运行中</div>',
+                '</div>',
+                '<div class="stat-card">',
+                '<div class="stat-number" style="color: #dc3545;">' + summary.stopped + '</div>',
+                '<div class="stat-label">🔴 已停止</div>',
+                '</div>',
+                '<div class="stat-card">',
+                '<div class="stat-number" style="color: #ffc107;">' + summary.unknown + '</div>',
+                '<div class="stat-label">⚠️ 状态未知</div>',
+                '</div>'
+            ].join('');
             twemoji.parse(container, { folder: 'svg', ext: '.svg' });
         }
-        
+
         // 更新 Apps 列表
         function updateAppsList(data) {
             const container = document.getElementById('appsContainer');
-            const { apps } = data;
+            const apps = data.apps;
             
             if (apps.length === 0) {
                 container.innerHTML = '<div class="loading">没有找到任何 Apps</div>';
-                twemoji.parse(container, { folder: 'svg', ext: '.svg' });
                 return;
             }
             
-            let html = \`
-                <table class="apps-table">
-                    <thead>
-                        <tr>
-                            <th>📦 App 名称</th>
-                            <th>📊 状态</th>
-                            <th>🆔 App ID</th>
-                            <th>🕒 创建时间</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            \`;
+            let html = [
+                '<table class="apps-table">',
+                '<thead>',
+                '<tr>',
+                '<th>📦 App 名称</th>',
+                '<th>📊 状态</th>',
+                '<th>🆔 App ID</th>',
+                '<th>🕒 创建时间</th>',
+                '</tr>',
+                '</thead>',
+                '<tbody>'
+            ].join('');
             
-            apps.forEach(app => {
-                const stateClass = \`state-\${app.state.toLowerCase()}\`;
+            apps.forEach(function(app) {
+                const stateClass = 'state-' + app.state.toLowerCase();
                 const createDate = app.createdAt ? new Date(app.createdAt).toLocaleString() : '未知';
-
-                // 根据状态显示不同的 emoji
-                let stateEmoji = '';
-                switch (app.state.toLowerCase()) {
-                    case 'active':
-                        stateEmoji = '🟢';
-                        break;
-                    case 'stopped':
-                        stateEmoji = '🔴';
-                        break;
-                    default:
-                        stateEmoji = '⚠️';
-                        break;
-                }                
-
-                html += \`
-                    <tr>
-                        <td><strong>\${app.name}</strong></td>
-                        <td>
-                            <span class="state-badge \${stateClass}">
-                                \${app.state}
-                            </span>
-                        </td>
-                        <td><code>\${app.id}</code></td>
-                        <td>\${createDate}</td>
-                    </tr>
-                \`;
+                
+                html += [
+                    '<tr>',
+                    '<td><strong>' + app.name + '</strong></td>',
+                    '<td>',
+                    '<span class="state-badge ' + stateClass + '">',
+                    app.state,
+                    '</span>',
+                    '</td>',
+                    '<td><code>' + app.id + '</code></td>',
+                    '<td>' + createDate + '</td>',
+                    '</tr>'
+                ].join('');
             });
             
             html += '</tbody></table>';
             container.innerHTML = html;
             twemoji.parse(container, { folder: 'svg', ext: '.svg' });
         }
-        
+       
         // 最后更新时间
         function updateLastUpdated() {
             const now = new Date();
@@ -815,10 +952,19 @@ function getFrontendHTML() {
 async function testNotification(config) {
   const message = `🔔 <b>Databricks Apps 监控测试通知</b>\n\n` +
                  `✅ 这是一条测试消息\n` +
+                 `🌐 ARGO域名: <code>${config.ARGO_DOMAIN}</code>\n` +
                  `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
                  `🎉 如果你的 Telegram 配置正确，你应该能收到这条消息`;
-  
   return await sendTelegramNotification(config, message);
+}
+
+// 检查 ARGO 状态
+async function checkArgoStatusOnly(config) {
+  const argoStatus = await checkArgoDomain(config.ARGO_DOMAIN);
+  return {
+    ...argoStatus,
+    argoDomain: config.ARGO_DOMAIN
+  };
 }
 
 // 主 Worker 处理器
@@ -827,29 +973,48 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     
-    // 前端页面
     if (path === '/' || path === '/index.html') {
       return new Response(getFrontendHTML(), {
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       });
     }
     
-    // API 端点
     if (path === '/check') {
       try {
         const config = getConfig(env);
-        const result = await checkAndStartApps(config);
+        const result = await smartCheckAndStartApps(config);
+        
         return new Response(JSON.stringify({
           success: true,
-          message: '检查完成',
+          message: result.message || '检查完成',
           timestamp: new Date().toISOString(),
-          results: result
+          argoStatus: result.argoStatus,
+          statusChanged: result.statusChanged,
+          results: result.results || []
         }), {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (error) {
         return new Response(JSON.stringify({
           success: false,
+          error: error.message
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    
+    if (path === '/check-argo') {
+      try {
+        const config = getConfig(env);
+        const result = await checkArgoStatusOnly(config);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          online: false,
           error: error.message
         }), {
           status: 500,
@@ -916,6 +1081,7 @@ export default {
         DATABRICKS_TOKEN: maskedToken,
         CHAT_ID: config.CHAT_ID || '未设置',
         BOT_TOKEN: maskedBotToken,
+        ARGO_DOMAIN: config.ARGO_DOMAIN || '未设置',
         source: config.source
       }, null, 2), {
         headers: { 'Content-Type': 'application/json' }
@@ -954,13 +1120,13 @@ export default {
       }
     }
     
-    // 未知路由
     return new Response(JSON.stringify({
       error: '路由不存在',
       available_routes: [
         { path: '/', method: 'GET', description: '前端管理界面' },
         { path: '/status', method: 'GET', description: '获取当前 Apps 状态' },
-        { path: '/check', method: 'GET', description: '检查并自动启动停止的 Apps' },
+        { path: '/check', method: 'GET', description: '智能检查（ARGO优先）' },
+        { path: '/check-argo', method: 'GET', description: '检查 ARGO 域名状态' },
         { path: '/start', method: 'POST', description: '手动启动所有停止的 Apps' },
         { path: '/config', method: 'GET', description: '查看当前配置信息' },
         { path: '/test-notification', method: 'POST', description: '测试 Telegram 通知' }
@@ -970,15 +1136,19 @@ export default {
       headers: { 'Content-Type': 'application/json' }
     });
   },
-  
-  // 定时任务处理器
+
+  // 定时任务函数
   async scheduled(event, env, ctx) {
-    console.log('开始定时检查 Databricks Apps 状态...');
+    console.log('开始定时智能检查...');
     
     try {
       const config = getConfig(env);
-      await checkAndStartApps(config);
-      console.log('定时检查完成');
+      const result = await smartCheckAndStartApps(config);
+      
+      console.log('定时检查完成:', result.message);
+      if (result.statusChanged) {
+        console.log('ARGO 状态发生变化，已处理');
+      }
     } catch (error) {
       console.error('定时检查过程中出错:', error);
     }
