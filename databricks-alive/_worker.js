@@ -801,6 +801,7 @@ function getFrontendHTML() {
             } catch (error) {
                 showMessage('❌ 请求失败: ' + error.message, 'error');
             } finally {
+                await checkArgoStatus();
                 setLoading(false);
             }
         }
@@ -832,6 +833,7 @@ function getFrontendHTML() {
             } catch (error) {
                 showMessage('❌ 请求失败: ' + error.message, 'error');
             } finally {
+                await checkArgoStatus();
                 setLoading(false);
             }
         }
