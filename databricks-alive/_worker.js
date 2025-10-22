@@ -486,7 +486,7 @@ function getFrontendHTML() {
         .status-card.argo-offline { border-left-color: #dc3545; }
         .status-title { font-size: 1.2em; font-weight: bold; margin-bottom: 15px; color: #2c3e50; }
         .status-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .status-item { padding: 10px; background: #f8f9fa; border-radius: 6px; }
+        .status-item { padding: 10px; background: #f8f9fa; border-radius: 8px; }
         .status-label { font-size: 0.9em; color: #6c757d; }
         .status-value { font-size: 1.1em; font-weight: bold; margin-top: 5px; }        
         .stats {
@@ -537,7 +537,7 @@ function getFrontendHTML() {
           font-weight: 600;
           color: #2c3e50;
         }
-        .state-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }
+        .state-badge { padding: 4px 12px; border-radius: 8px; font-size: 0.85em; font-weight: 600; }
         .state-active { background: #d4edda; color: #155724; }
         .state-stopped { background: #f8d7da; color: #721c24; }
         .state-unknown { background: #fff3cd; color: #856404; }
@@ -568,7 +568,7 @@ function getFrontendHTML() {
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           padding: 15px;
-          border-radius: 6px;
+          border-radius: 8px;
           border-left: 4px solid #007bff;
           flex: 1 1 calc(50% - 20px);
           box-sizing: border-box;
@@ -704,9 +704,10 @@ function getFrontendHTML() {
         
         // 页面加载时获取状态
         document.addEventListener('DOMContentLoaded', function() {
-            refreshStatus();
-            checkTelegramStatus();
-            twemoji.parse(document.body, { folder: 'svg', ext: '.svg' });
+            Promise.all([
+                refreshStatus(),
+                checkArgoStatus() 
+            ]).catch(error => console.error("初始化加载失败:", error));
         });
         
         // 检查 ARGO 状态
@@ -733,7 +734,7 @@ function getFrontendHTML() {
                         statusEl.innerHTML = '<span style="color: #dc3545;">🔴 离线 - 连接失败</span>';
                     }
                 }
-                twemoji.parse(document.body, { folder: 'svg', ext: '.svg' });
+                twemoji.parse(statusCard, { folder: 'svg', ext: '.svg' });
             } catch (error) {
                 document.getElementById('argoStatus').innerHTML = '<span style="color: #dc3545;">❌ 检查失败</span>';
             }
@@ -769,7 +770,7 @@ function getFrontendHTML() {
                     currentData = data;
                     updateStats(data.results);
                     updateAppsList(data.results);
-                    updateLastUpdated();
+                    updateLastUpdated(); // 确保更新时间
                     showMessage('✅ Databricks 状态刷新成功', 'success');
                 } else {
                     showMessage('❌ 刷新失败: ' + data.error, 'error');
@@ -777,6 +778,7 @@ function getFrontendHTML() {
             } catch (error) {
                 showMessage('❌ 请求失败: ' + error.message, 'error');
             } finally {
+                await checkArgoStatus(); 
                 setLoading(false);
             }
         }
