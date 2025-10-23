@@ -639,10 +639,10 @@ function getFrontendHTML() {
             top: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.6);
         }
         .modal-content {
-            background: rgba(0, 0, 0, 0.3);
+            background: white;
             margin: 5% auto;
             padding: 0;
             border: none;
@@ -660,12 +660,13 @@ function getFrontendHTML() {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid #e9ecef;
         }
         .modal-body {
             padding: 20px;
             max-height: 60vh;
             overflow-y: auto;
-            background: #f8f9fa;
+            background: rgba(0, 0, 0, 0.3);
         }
         .modal-footer {
             padding: 15px 20px;
@@ -825,7 +826,7 @@ function getFrontendHTML() {
                 <div class="log-entry log-info">等待开始创建APP...</div>
             </div>
             <div class="modal-footer">
-              <button class="btn btn-primary" onclick="closeLogModal()" style="margin-bottom: 10px;">🎯 关闭</button>
+              <button class="btn btn-primary" onclick="closeLogModal()">🎯 关闭</button>
             </div>
         </div>
     </div>
