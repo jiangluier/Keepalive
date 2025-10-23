@@ -39,6 +39,7 @@ Databricks部署节点视频教程：https://youtu.be/r35kK77PlLg
 - `GET /check` - 智能检查（ARGO优先）
 - `GET /check-argo` - 检查 ARGO 域名状态
 - `POST /start` - 手动启动所有停止的 Apps
+- `POST /create-app` - 创建/替换 APP（先删除再创建新APP）
 - `GET /config` - 查看当前配置信息
 - `POST /test-notification` - 测试 Telegram 通知
 
