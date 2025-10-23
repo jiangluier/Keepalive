@@ -1,8 +1,12 @@
-# Databricks Keep-Alive Workers 部署说明
+# Databricks Keep-Alive Workers
 
 这个 Worker 脚本用于监控和自动重启 Databricks App，确保它们保持运行状态。
 
 Databricks部署节点视频教程：https://youtu.be/r35kK77PlLg
+
+## 说明
+
+本项目由老王的 [原始项目](https://github.com/eooce/Databricks-keepalive-workers) 和`灰色轨迹`的 [修改项目](https://github.com/jy02739245/Databricks-keepalive-workers) 整合而来，UI界面改为**半透明爆玻璃**效果，支持**一键创建 APP**
 
 ## 部署指南
 
@@ -32,7 +36,8 @@ Databricks部署节点视频教程：https://youtu.be/r35kK77PlLg
 
 - `GET /` - 显示管理界面
 - `GET /status` - 获取当前所有 Apps 的状态
-- `GET /check` - 检查并自动启动停止的 Apps
+- `GET /check` - 智能检查（ARGO优先）
+- `GET /check-argo` - 检查 ARGO 域名状态
 - `POST /start` - 手动启动所有停止的 Apps
 - `GET /config` - 查看当前配置信息
 - `POST /test-notification` - 测试 Telegram 通知
@@ -62,8 +67,8 @@ Databricks部署节点视频教程：https://youtu.be/r35kK77PlLg
 ### 监控配置
 
 - 监控类型：`HTTP(S)-关键字`
-- 监控地址：`https://本项目worker地址/status`
-- 关键字: `"success":true`
+- 监控地址：`https://本项目worker地址/check-argo`
+- 关键字: `"online": true`
 
 ### 通知保活
 
