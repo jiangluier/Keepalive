@@ -1,6 +1,6 @@
 # 各种自动保活脚本
 
-## VPS一键无协议无交互安装脚本
+## VPS一键五协议无交互安装脚本
 
 vless+reality | vmess+argo | hy2 | tuic | socks5
 
