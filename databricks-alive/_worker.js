@@ -11,8 +11,8 @@ const DEFAULT_CONFIG = {
 function getConfig(env) {
   const host = env.DATABRICKS_HOST || DEFAULT_CONFIG.DATABRICKS_HOST;
   const token = env.DATABRICKS_TOKEN || DEFAULT_CONFIG.DATABRICKS_TOKEN;
-  const chatId = env.CHAT_ID || DEFAULT_CONFIG.CHAT_ID;
-  const botToken = env.BOT_TOKEN || DEFAULT_CONFIG.BOT_TOKEN;
+  const chatId = env.TG_CHAT_ID || DEFAULT_CONFIG.CHAT_ID;
+  const botToken = env.TG_BOT_TOKEN || DEFAULT_CONFIG.BOT_TOKEN;
   const argoDomain = env.ARGO_DOMAIN || DEFAULT_CONFIG.ARGO_DOMAIN;
   
   return {
@@ -132,6 +132,18 @@ async function sendArgoRecoveryNotification(config) {
   return await sendTelegramNotification(config, message);
 }
 
+// 发送离线通知
+async function sendOfflineNotification(config, appName, appId) {
+  const message = `🔴 <b>Databricks App 离线</b>\n\n` +
+                 `📱 App: <code>${appName}</code>\n` +
+                 `🆔 ID: <code>${appId}</code>\n` +
+                 `🌐 ARGO: <code>${config.ARGO_DOMAIN}</code>\n` +
+                 `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
+                 `⚡ 系统正在尝试自动重启...`;
+
+  return await sendTelegramNotification(config, message);
+}
+
 // 发送启动成功通知
 async function sendStartSuccessNotification(config, appName, appId) {
   const message = `✅ <b>Databricks App 启动成功</b>\n\n` +
@@ -214,14 +226,22 @@ async function getAppsStatus(config) {
   try {
     const apps = await getAppsList(config);
     
-    const results = apps.map(app => ({
-      name: app.name,
-      id: app.id,
-      state: app.compute_status?.state || 'UNKNOWN',
-      url: app.url,
-      createdAt: app.creation_timestamp,
-      lastUpdated: app.last_updated_timestamp
-    }));
+    const results = apps.map(app => {
+      const creationTimestampMs = app.creation_timestamp 
+          ? app.creation_timestamp * 1000 
+          : null;
+      
+      return {
+          name: app.name,
+          id: app.id,
+          state: app.compute_status?.state || 'UNKNOWN',
+          url: app.url,
+          createdAt: creationTimestampMs, 
+          lastUpdated: app.last_updated_timestamp 
+              ? app.last_updated_timestamp * 1000 
+              : null
+      };
+    });
     
     const summary = {
       total: results.length,
@@ -331,7 +351,7 @@ async function processApp(app, config) {
     console.log(`⚡ 启动停止的 App: ${appName}`);
     
     await sendOfflineNotification(config, appName, appId);
-    
+
     return await startSingleApp(app, config);
   } else {
     console.log(`✅ App ${appName} 状态正常: ${computeState}`);
@@ -459,17 +479,17 @@ function getFrontendHTML() {
         .header p { opacity: 0.9; font-size: 1.1em; }
         .controls {
           padding: 25px;
-          margin: 0 25px;
+          margin: 25px 25px 0 25px;
           background: rgba(255, 255, 255, 0.3);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.2);
           display: flex;
           gap: 15px;
           flex-wrap: wrap;
           align-items: center;
+          justify-content: space-between;
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           box-shadow: 5px 0 15px rgba(0, 0, 0, 0.15);
-          border-radius: 8px 8px 0 0;
+          border-radius: 8px;
         }
         .status-panel { padding: 25px; }
         .status-card {
@@ -479,47 +499,61 @@ function getFrontendHTML() {
           padding: 20px;
           border-radius: 8px;
           box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
-          margin-bottom: 20px;
           border-left: 4px solid #007bff;
         }
         .status-card.argo-online { border-left-color: #28a745; }
         .status-card.argo-offline { border-left-color: #dc3545; }
         .status-title { font-size: 1.2em; font-weight: bold; margin-bottom: 15px; color: #2c3e50; }
         .status-content { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .status-item { padding: 10px; background: #f8f9fa; border-radius: 8px; }
+        .status-item {
+          padding: 10px;
+          background: rgba(255, 255, 255, 0.35);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border-radius: 8px;
+        }
         .status-label { font-size: 0.9em; color: #6c757d; }
         .status-value { font-size: 1.1em; font-weight: bold; margin-top: 5px; }        
         .stats {
-          display: grid;
-          grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+          width: 100%;
+          display: flex;
+          flex-direction: row;
           gap: 20px;
-          padding: 25px;
-          margin: 0 25px;
-          background: rgba(255, 255, 255, 0.3);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
-          border-radius: 0 0 8px 8px;
+          flex-wrap: wrap;
+          justify-content: flex-start;
+          margin-top: 10px;
         }
         .stat-card {
-          background: rgba(255, 255, 255, 0.3);
+          flex: 1; 
+          min-width: 150px; 
+          box-sizing: border-box; 
+          background: rgba(255, 255, 255, 0.35);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           padding: 20px;
           border-radius: 8px;
           text-align: center;
           border-left: 4px solid #007bff;
+          height: 120px; 
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+        .stat-card.last-updated-card .stat-number {
+          font-size: 1.2em;
+          line-height: 1.3;
         }
         .stat-number { font-size: 2.5em; font-weight: bold; color: #2c3e50; }
         .stat-label { color: #6c757d; font-size: 0.9em; margin-top: 5px; }
         .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
         .btn-primary { background: #007bff; color: white; }
+        .btn-secondary { background: #EC4A9D; color: white; }
         .btn-success { background: #28a745; color: white; }
         .btn-info { background: #17a2b8; color: white; }
         .btn-creat { background: #8a2be2; color: white; }
         .btn-warning { background: #ffc107; color: #212529; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .apps-list { padding: 25px; }
+        .apps-list { padding: 25px 25px 0 25px; }
         .apps-table {
           width: 100%;
           border-collapse: collapse;
@@ -530,7 +564,7 @@ function getFrontendHTML() {
           overflow: hidden;
           box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
         }
-        .apps-table th, .apps-table td { padding: 15px; text-align: left; border-bottom: 1px solid #e9ecef; }
+        .apps-table th, .apps-table td { padding: 15px; text-align: left; }
         .apps-table th {
           background: rgba(255, 255, 255, 0.3);
           backdrop-filter: blur(10px);
@@ -552,20 +586,20 @@ function getFrontendHTML() {
           -webkit-backdrop-filter: blur(10px);
           padding: 20px;
           border-radius: 8px;
-          margin: 20px 0;
+          margin: 20px 0 0 0;
         }
         .routes-info {
           background: rgba(255, 255, 255, 0.30);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
-          padding: 25px;
-          margin: 10px 25px 0 25px;
+          padding: 20px;
+          margin: 0 25px 25px 25px;
           border-radius: 8px;
           box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
         }
         .routes-info h3 { margin-bottom: 25px; color: #2c3e50; }
         .route-item {
-          background: rgba(255, 255, 255, 0.3);
+          background: rgba(255, 255, 255, 0.35);
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);
           padding: 15px;
@@ -608,7 +642,7 @@ function getFrontendHTML() {
             background: rgba(0, 0, 0, 0.3);
         }
         .modal-content {
-            background-color: #fefefe;
+            background: rgba(0, 0, 0, 0.3);
             margin: 5% auto;
             padding: 0;
             border: none;
@@ -621,7 +655,7 @@ function getFrontendHTML() {
         }
         .modal-header {
             padding: 20px;
-            background: rgba(0, 0, 0, 0.35);
+            background: rgba(0, 0, 0, 0.6);
             color: white;
             display: flex;
             justify-content: space-between;
@@ -635,7 +669,7 @@ function getFrontendHTML() {
         }
         .modal-footer {
             padding: 15px 20px;
-            background: rgba(0, 0, 0, 0.35);
+            background: rgba(0, 0, 0, 0.6);
             display: flex;
             justify-content: flex-end;
             border-top: 1px solid #e9ecef;
@@ -686,33 +720,36 @@ function getFrontendHTML() {
 <body>
     <div class="container">
         <div class="header">
-            <h1>👋 Databricks Apps 监控面板</h1>
-            <p>智能监控 - ARGO 状态优先，减少 API 调用</p>
+          <h1>👋 Databricks Apps 监控面板</h1>
+          <p>智能监控 - ARGO 状态优先，减少 API 调用</p>
         </div>
-            
-        <div class="controls">
-            <button class="btn btn-primary" onclick="refreshStatus()">🔄 刷新 Databricks 状态</button>
-            <button class="btn btn-success" onclick="startStoppedApps()">⚡ 启动停止的 Apps</button>
-            <button class="btn btn-info" onclick="checkAndStart()">🔍 智能检查</button>
-            <button class="btn btn-creat" onclick="createOrReplaceApp()">🛠️ 创建/替换 APP</button>
-            <button class="btn btn-warning" onclick="testNotification()">🔔 测试 Telegram 通知</button>
-            <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
-                <span id="lastUpdated">-</span>
-                <div id="loadingIndicator" style="display: none;">⏳ 加载中...</div>
-            </div>
-        </div>
-        
+
         <div id="messageContainer"></div>
-        
-        <div class="stats" id="statsContainer">
+
+        <div class="controls">
+          <button class="btn btn-primary" onclick="refreshStatus()">🔄 刷新状态</button>
+          <button class="btn btn-success" onclick="startStoppedApps()">⚡ 启动 APP</button>
+          <button class="btn btn-info" onclick="checkAndStart()">🔍 智能检查</button>
+          <button class="btn btn-creat" onclick="createOrReplaceApp()">🛠️ 创建 APP</button>
+          <button class="btn btn-warning" onclick="testNotification()">🔔 测试 TG 通知</button>
+          <a href="#" id="projectHomepageLink" target="_blank" class="btn btn-secondary" style="text-decoration: none;">🔗 项目主页</a>
+          <div class="stats" id="statsContainer">
             <div class="loading">⏳ 加载统计数据...</div>
+          </div>
         </div>
         
         <div class="apps-list">
-            <h2 style="margin-bottom: 20px; color: #2c3e50;">Databricks Apps 状态</h2>
-            <div id="appsContainer">
-                <div class="loading">⏳ 加载 Apps 列表...</div>
-            </div>
+          <h3 style="margin-bottom: 20px; color: #2c3e50;">
+              <img 
+                  src="https://ui-assets.cloud.databricks.com/favicon.ico" 
+                  alt="Databricks Icon" 
+                  style="width: 24px; height: 24px; vertical-align: middle; margin-right: 10px;"
+              >
+              Databricks Apps 状态
+          </h3>
+          <div id="appsContainer">
+              <div class="loading">⏳ 加载 Apps 列表...</div>
+          </div>
         </div>
 
         <div class="status-panel">
@@ -731,23 +768,6 @@ function getFrontendHTML() {
                         <div class="status-label">⚡ 状态码</div>
                         <div class="status-value" id="argoStatusCode">-</div>
                     </div>
-                    <div class="status-item">
-                        <div class="status-label">🔍 最后检查</div>
-                        <div class="status-value" id="argoLastCheck">-</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="status-card">
-                <div class="status-title">📊 监控策略</div>
-                <div class="info-panel">
-                    <p><strong>智能检测逻辑:</strong></p>
-                    <ul>
-                        <li>✅ 初始部署时显示 Databricks Apps 真实状态</li>
-                        <li>🔄 监控期间优先检查 ARGO 域名状态</li>
-                        <li>⚡ 仅在 ARGO 状态变化时才调用 Databricks API</li>
-                        <li>📉 大幅减少 API 调用频率，避免限制</li>
-                    </ul>
                 </div>
             </div>
         </div>
@@ -761,7 +781,7 @@ function getFrontendHTML() {
               <div class="route-item"><strong>GET /check-argo</strong> - 检查 ARGO 域名状态</div>
               <div class="route-item"><strong>POST /start</strong> - 手动启动所有停止的 Apps</div>
               <div class="route-item"><strong>GET /config</strong> - 查看当前配置信息</div>
-              <div class="route-item"><strong>POST /create-app</strong> - 创建/替换 APP（先删除现有APP再创建新APP）</div>
+              <div class="route-item"><strong>POST /create-app</strong> - 创建/替换 APP（先删除再创建新APP）</div>
               <div class="route-item"><strong>POST /test-notification</strong> - 测试 Telegram 通知</div>
           </div>
         </div>
@@ -773,6 +793,12 @@ function getFrontendHTML() {
                 </svg>
                 GitHub
             </a>
+            <a href="https://github.com/yutian81/Keepalive/blob/main/databricks-alive" target="_blank">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+                Yutian81修改
+            </a>            
             <a href="https://www.youtube.com/@eooce" target="_blank">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 011.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.007 2.007 0 01-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.007 2.007 0 01-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31.4 31.4 0 010 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.007 2.007 0 011.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A99.788 99.788 0 017.858 2h.193zM6.4 5.209v4.818l4.157-2.408L6.4 5.209z"/>
@@ -799,7 +825,7 @@ function getFrontendHTML() {
                 <div class="log-entry log-info">等待开始创建APP...</div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-primary" onclick="closeLogModal()">关闭</button>
+              <button class="btn btn-primary" onclick="closeLogModal()" style="margin-bottom: 10px;">🎯 关闭</button>
             </div>
         </div>
     </div>
@@ -813,11 +839,44 @@ function getFrontendHTML() {
         
         // 页面加载时获取状态
         document.addEventListener('DOMContentLoaded', function() {
-            Promise.all([
-                refreshStatus(),
-                checkArgoStatus() 
-            ]).catch(error => console.error("初始化加载失败:", error));
+          twemoji.parse(document.body, { folder: 'svg', ext: '.svg' });
+          Promise.all([
+              refreshStatus(),
+              updateProjectHomepage(),
+              checkArgoStatus() 
+          ]).catch(error => console.error("初始化加载失败:", error));
         });
+
+        // 获取配置并更新链接
+        async function updateProjectHomepage() {
+            const linkElement = document.getElementById('projectHomepageLink');
+            if (!linkElement) return;
+        
+            try {
+                const response = await fetch('/config');
+                const config = await response.json();
+                const host = config.DATABRICKS_HOST;
+                
+                if (host && host !== '未设置') {
+                    linkElement.href = host;
+                    linkElement.title = '访问: ' + host; 
+                    linkElement.classList.remove('btn-disabled');
+                    linkElement.style.pointerEvents = 'auto';
+                    console.log('项目主页链接已更新为:', host);
+                } else {
+                    console.warn('配置中缺少 DATABRICKS_HOST，无法设置主页链接。');
+                    linkElement.classList.add('btn-danger');
+                    linkElement.classList.add('disabled');
+                    linkElement.style.pointerEvents = 'none';
+                }
+        
+            } catch (error) {
+                console.error('获取配置失败:', error);
+                linkElement.textContent = '❌ 链接加载失败';
+                linkElement.classList.add('btn-danger');
+                linkElement.style.pointerEvents = 'none';
+            }
+        }
 
         // 关闭模态框的通用函数
         function closeLogModal() {
@@ -962,7 +1021,6 @@ function getFrontendHTML() {
                 
                 document.getElementById('argoDomain').textContent = data.argoDomain || '-';
                 document.getElementById('argoStatusCode').textContent = data.statusCode || '-';
-                document.getElementById('argoLastCheck').textContent = new Date().toLocaleString();
                 
                 const statusCard = document.getElementById('argoStatusCard');
                 const statusEl = document.getElementById('argoStatus');
@@ -1082,7 +1140,7 @@ function getFrontendHTML() {
             }
         }
         
-        // 显示消息
+        // 显示刷新状态的消息
         function showMessage(message, type) {
             const container = document.getElementById('messageContainer');
             const messageEl = document.createElement('div');
@@ -1095,52 +1153,53 @@ function getFrontendHTML() {
         
         // 显示加载状态
         function setLoading(loading) {
-            const indicator = document.getElementById('loadingIndicator');
             const buttons = document.querySelectorAll('.btn');
-            
             if (loading) {
-                indicator.style.display = 'block';
                 buttons.forEach(function(btn) { btn.disabled = true; });
             } else {
-                indicator.style.display = 'none';
                 buttons.forEach(function(btn) { btn.disabled = false; });
             }
         }
         
         // 更新统计信息
         function updateStats(data) {
-            const container = document.getElementById('statsContainer');
-            const summary = data.summary;
-            
-            container.innerHTML = [
-                '<div class="stat-card">',
-                '<div class="stat-number">' + summary.total + '</div>',
-                '<div class="stat-label">📦 Apps 数量</div>',
-                '</div>',
-                '<div class="stat-card">',
-                '<div class="stat-number" style="color: #28a745;">' + summary.active + '</div>',
-                '<div class="stat-label">🟢 运行中</div>',
-                '</div>',
-                '<div class="stat-card">',
-                '<div class="stat-number" style="color: #dc3545;">' + summary.stopped + '</div>',
-                '<div class="stat-label">🔴 已停止</div>',
-                '</div>',
-                '<div class="stat-card">',
-                '<div class="stat-number" style="color: #ffc107;">' + summary.unknown + '</div>',
-                '<div class="stat-label">⚠️ 状态未知</div>',
-                '</div>'
-            ].join('');
-            twemoji.parse(container, { folder: 'svg', ext: '.svg' });
+          const container = document.getElementById('statsContainer');
+          const summary = data.summary;
+      
+          container.innerHTML = [
+              '<div class="stat-card">',
+                  '<div class="stat-number">' + summary.total + '</div>',
+                  '<div class="stat-label">📦 Apps 数量</div>',
+              '</div>',
+              '<div class="stat-card">',
+                  '<div class="stat-number" style="color: #28a745;">' + summary.active + '</div>',
+                  '<div class="stat-label">🟢 运行中</div>',
+              '</div>',
+              '<div class="stat-card">',
+                  '<div class="stat-number" style="color: #dc3545;">' + summary.stopped + '</div>',
+                  '<div class="stat-label">🔴 已停止</div>',
+              '</div>',
+              '<div class="stat-card">',
+                  '<div class="stat-number" style="color: #ffc107;">' + summary.unknown + '</div>',
+                  '<div class="stat-label">⚠️ 状态未知</div>',
+              '</div>',
+              '<div class="stat-card last-updated-card">',
+                  '<div class="stat-number" id="lastUpdatedCardTime">-</div>',
+                  '<div class="stat-label">🕒 最后更新</div>',
+              '</div>'
+          ].join('');
+          twemoji.parse(container, { folder: 'svg', ext: '.svg' });
+          updateLastUpdated(true); // 创建卡片后调用更新时间函数
         }
 
         // 更新 Apps 列表
         function updateAppsList(data) {
             const container = document.getElementById('appsContainer');
             const apps = data.apps;
-            
+
             if (apps.length === 0) {
-                container.innerHTML = '<div class="loading">没有找到任何 Apps</div>';
-                return;
+              container.innerHTML = titleHtml + '<div class="loading">没有找到任何 Apps</div>';
+              return;
             }
             
             let html = [
@@ -1182,10 +1241,10 @@ function getFrontendHTML() {
         // 最后更新时间
         function updateLastUpdated() {
             const now = new Date();
-            const lastUpdatedElement = document.getElementById('lastUpdated');
-            if (lastUpdatedElement) {
-                lastUpdatedElement.textContent = '🕒 最后更新: ' + now.toLocaleString();
-                twemoji.parse(lastUpdatedElement, { folder: 'svg', ext: '.svg' });
+            const timeString = now.toLocaleDateString() + '<br>' + now.toLocaleTimeString(); 
+            const lastUpdatedCardElement = document.getElementById('lastUpdatedCardTime'); 
+            if (lastUpdatedCardElement) {
+                lastUpdatedCardElement.innerHTML = timeString; // 使用 innerHTML 来识别 <br>
             }
         }
         
