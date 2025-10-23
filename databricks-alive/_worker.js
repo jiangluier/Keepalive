@@ -547,7 +547,7 @@ function getFrontendHTML() {
         .stat-label { color: #6c757d; font-size: 0.9em; margin-top: 5px; }
         .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
         .btn-primary { background: #007bff; color: white; }
-        .btn-secondary { background: #EC4A9D; color: white; }
+        .btn-secondary { background: #EC4A9D; color: white; text-align: center; }
         .btn-success { background: #28a745; color: white; }
         .btn-info { background: #17a2b8; color: white; }
         .btn-creat { background: #8a2be2; color: white; }
