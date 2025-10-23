@@ -516,6 +516,7 @@ function getFrontendHTML() {
         .btn-primary { background: #007bff; color: white; }
         .btn-success { background: #28a745; color: white; }
         .btn-info { background: #17a2b8; color: white; }
+        .btn-creat { background: #8a2be2; color: white; }
         .btn-warning { background: #ffc107; color: #212529; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .apps-list { padding: 25px; }
@@ -594,6 +595,92 @@ function getFrontendHTML() {
             .route-item { flex: 1 1 100%; }
             .footer-links { flex-direction: column; align-items: center; gap: 15px; }
         }
+        
+        /* Modal styles 创建app的模态框样式*/
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: none;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.15);
+        }
+        .modal-header {
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.35);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-body {
+            padding: 20px;
+            max-height: 60vh;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+        .modal-footer {
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.35);
+            display: flex;
+            justify-content: flex-end;
+            border-top: 1px solid #e9ecef;
+        }
+        .close {
+            color: black;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #ddd;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .log-info {
+            color: #0066cc;
+        }
+        .log-success {
+            color: #28a745;
+        }
+        .log-error {
+            color: #dc3545;
+        }
+        .log-warning {
+            color: #ffc107;
+        }
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -607,6 +694,7 @@ function getFrontendHTML() {
             <button class="btn btn-primary" onclick="refreshStatus()">🔄 刷新 Databricks 状态</button>
             <button class="btn btn-success" onclick="startStoppedApps()">⚡ 启动停止的 Apps</button>
             <button class="btn btn-info" onclick="checkAndStart()">🔍 智能检查</button>
+            <button class="btn btn-creat" onclick="createOrReplaceApp()">🛠️ 创建/替换 APP</button>
             <button class="btn btn-warning" onclick="testNotification()">🔔 测试 Telegram 通知</button>
             <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
                 <span id="lastUpdated">-</span>
@@ -669,9 +757,11 @@ function getFrontendHTML() {
           <div class="routes-grid">
               <div class="route-item"><strong>GET /</strong> - 显示此管理界面</div>
               <div class="route-item"><strong>GET /status</strong> - 获取当前所有 Apps 的状态</div>
-              <div class="route-item"><strong>GET /check</strong> - 检查并自动启动停止的 Apps</div>
+              <div class="route-item"><strong>GET /check</strong> - 智能检查（ARGO优先）</div>
+              <div class="route-item"><strong>GET /check-argo</strong> - 检查 ARGO 域名状态</div>
               <div class="route-item"><strong>POST /start</strong> - 手动启动所有停止的 Apps</div>
               <div class="route-item"><strong>GET /config</strong> - 查看当前配置信息</div>
+              <div class="route-item"><strong>POST /create-app</strong> - 创建/替换 APP（先删除现有APP再创建新APP）</div>
               <div class="route-item"><strong>POST /test-notification</strong> - 测试 Telegram 通知</div>
           </div>
         </div>
@@ -698,9 +788,28 @@ function getFrontendHTML() {
         </div>
     </div>
 
+    <!-- 创建APP日志模态框 -->
+    <div id="logModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🛠️ 创建APP日志</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body" id="logContent">
+                <div class="log-entry log-info">等待开始创建APP...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeLogModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
     <script>
         let currentData = null;
+        let logModal = document.getElementById("logModal");
+        let logContent = document.getElementById("logContent");
+        let span = document.getElementsByClassName("close")[0];
         
         // 页面加载时获取状态
         document.addEventListener('DOMContentLoaded', function() {
@@ -709,7 +818,142 @@ function getFrontendHTML() {
                 checkArgoStatus() 
             ]).catch(error => console.error("初始化加载失败:", error));
         });
-        
+
+        // 关闭模态框的通用函数
+        function closeLogModal() {
+            const confirmed = confirm('确定要关闭窗口吗？这将会停止APP创建过程。');
+            if (confirmed) {
+                logModal.style.display = "none"; 
+                if (window.appCreationSocket) {
+                    window.appCreationSocket.close();
+                    delete window.appCreationSocket;
+                }
+            }
+        }
+        // 关闭模态框 (点击关闭按钮)
+        span.onclick = closeLogModal;
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            if (event.target === logModal) {
+                closeLogModal();
+            }
+        }
+
+        // 添加日志条目
+        function addLogEntry(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry log-' + type;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.innerHTML = '<span class="spinner" style="display: none;"></span>[' + timestamp + '] ' + message;
+            logContent.appendChild(entry);
+            logContent.scrollTop = logContent.scrollHeight;
+            twemoji.parse(entry, { folder: 'svg', ext: '.svg' });
+        }
+
+        // 设置加载状态
+        function setLogLoading(loading) {
+            const entries = logContent.getElementsByClassName('log-entry');
+            if (entries.length > 0) {
+                const lastEntry = entries[entries.length - 1];
+                const spinner = lastEntry.querySelector('.spinner'); 
+                if (spinner) {
+                    spinner.style.display = loading ? 'inline-block' : 'none';
+                }
+            }
+        }
+
+        // 创建或替换APP
+        async function createOrReplaceApp() {
+            if (!confirm('确定要创建新的APP吗？如果是免费用户且已有APP，将先删除现有APP再创建新APP。')) return;
+
+            // 显示日志模态框
+            logModal.style.display = "block";
+            logContent.innerHTML = '';
+            addLogEntry('⏳ 正在连接到服务器...', 'info');
+            setLoading(true);
+            setLogLoading(true);
+
+            // 创建APP的函数，支持重启
+            async function startAppCreation() {
+                try {
+                    // 建立WebSocket连接以获取实时日志
+                    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = wsProtocol + '//' + window.location.host + '/create-app';
+                    const socket = new WebSocket(wsUrl);
+
+                    // 保存WebSocket连接引用，以便在关闭时使用
+                    window.appCreationSocket = socket;
+                    socket.onopen = function(event) {
+                        setLogLoading(false);
+                        addLogEntry('✅ 已连接到服务器，开始创建APP...', 'success');
+                    };
+
+                    socket.onmessage = function(event) {
+                        try {
+                            const data = JSON.parse(event.data);
+                            if (data.type === 'complete') {
+                                setLogLoading(false);
+                                if (data.success) {
+                                    addLogEntry('✅ APP创建成功', 'success');
+                                    showMessage('✅ APP创建成功', 'success');
+                                } else {
+                                    addLogEntry('❌ APP创建失败: ' + data.error, 'error');
+                                    showMessage('❌ APP创建失败: ' + data.error, 'error');
+                                }
+                                socket.close();
+                            } else if (data.type === 'restart') {
+                                // 收到重启信号，关闭当前连接并重新开始
+                                setLogLoading(false);
+                                addLogEntry(data.message, 'info');
+                                addLogEntry('⏳ 正在重新连接服务器...', 'info');
+                                setLogLoading(true);
+                                socket.close();
+                                setTimeout(() => {
+                                    startAppCreation();
+                                }, 2000);
+                            } else {
+                                setLogLoading(false);
+                                addLogEntry(data.message, data.type || 'info');
+                                setLogLoading(true);
+                            }
+                        } catch (e) {
+                            setLogLoading(false);
+                            addLogEntry('⚠️ 收到未知消息: ' + event.data, 'info');
+                        }
+                    };
+
+                    socket.onerror = function(error) {
+                        setLogLoading(false);
+                        addLogEntry('❌ WebSocket 连接错误: ' + error.message, 'error');
+                        showMessage('❌ WebSocket 连接错误: ' + error.message, 'error');
+                    };
+
+                    socket.onclose = function(event) {
+                        setLogLoading(false);
+                        if (event.wasClean) {
+                            addLogEntry('⚠️ 连接已关闭', 'info');
+                        } else {
+                            addLogEntry('❌ 连接意外中断', 'warning');
+                        }
+                        // 清理WebSocket连接引用
+                        if (window.appCreationSocket === socket) {
+                            delete window.appCreationSocket;
+                        }
+                        setLoading(false);
+                    };
+
+                } catch (error) {
+                    setLogLoading(false);
+                    addLogEntry('❌ 建立连接时出错: ' + error.message, 'error');
+                    showMessage('❌ 请求失败: ' + error.message, 'error');
+                    setLoading(false);
+                }
+            }
+
+            // 开始创建APP
+            startAppCreation();
+        }
+
         // 检查 ARGO 状态
         async function checkArgoStatus() {
             try {
@@ -845,6 +1089,7 @@ function getFrontendHTML() {
             messageEl.className = type === 'error' ? 'error' : 'success';
             messageEl.textContent = message;
             container.appendChild(messageEl);
+            twemoji.parse(messageEl, { folder: 'svg', ext: '.svg' });
             setTimeout(function() { messageEl.remove(); }, 5000);
         }
         
@@ -950,6 +1195,576 @@ function getFrontendHTML() {
 </body>
 </html>
   `;
+}
+
+// 创建或替换APP的后端处理函数
+async function handleCreateOrReplaceApp(config, logStream) {
+  const { DATABRICKS_HOST, DATABRICKS_TOKEN } = config;
+  let creationAttempts = 0;
+  const maxCreationAttempts = 200;
+
+  // 心跳定时器
+  let heartbeatInterval;
+
+  // 发送日志消息的函数
+  function sendLog(message, type = 'info') {
+    if (logStream && !logStream.isClosed()) {
+      try {
+        logStream.send(JSON.stringify({ type, message }));
+      } catch (e) {
+        // 发送失败可能是因为连接已关闭
+      }
+    }
+    console.log('[' + type + '] ' + message);
+  }
+
+  // 检查是否已取消的函数
+  function isCancelled() {
+    return logStream && logStream.isClosed();
+  }
+
+  // 启动心跳机制
+  function startHeartbeat() {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+    }
+
+    heartbeatInterval = setInterval(() => {
+      if (logStream && !logStream.isClosed()) {
+        try {
+          logStream.send(JSON.stringify({ type: 'heartbeat', message: '保持连接活跃' }));
+        } catch (e) {
+          // 发送心跳失败，可能是连接已关闭
+          clearInterval(heartbeatInterval);
+        }
+      } else {
+        clearInterval(heartbeatInterval);
+      }
+    }, 45000); // 每45秒发送一次心跳
+  }
+
+  // 停止心跳机制
+  function stopHeartbeat() {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  }
+
+  try {
+    // 启动心跳机制
+    startHeartbeat();
+
+    // 先获取现有的APP列表
+    const apps = await getAppsList(config);
+
+    // 检查是否已取消
+    if (isCancelled()) {
+      sendLog('操作已被用户取消', 'warning');
+      throw new Error('操作已被用户取消');
+    }
+
+    // 如果没有APP，直接创建新APP
+    if (apps.length === 0) {
+      sendLog('没有发现现有APP，直接创建新APP', 'info');
+    } 
+    // 如果有APP，检查APP状态，只在状态为ERROR时删除并创建APP
+    else {
+      sendLog('检测到 ' + apps.length + ' 个现有APP，开始检查APP状态...', 'info');
+
+      // 检查每个APP的状态
+      let hasErrorApp = false;
+      for (const app of apps) {
+        // 检查是否已取消
+        if (isCancelled()) {
+          sendLog('操作已被用户取消', 'warning');
+          throw new Error('操作已被用户取消');
+        }
+
+        const appName = app.name;
+        sendLog('正在检查APP状态: ' + appName + '，当前状态: ' + app.state, 'info');
+        
+        // 只有当APP状态为ERROR时才标记为需要删除
+        if (app.state === 'ERROR') {
+          hasErrorApp = true;
+          sendLog('发现处于ERROR状态的APP: ' + appName, 'warning');
+        }
+      }
+
+      // 只有当存在ERROR状态的APP时才执行删除和创建操作
+      if (hasErrorApp) {
+        sendLog('发现处于ERROR状态的APP，开始删除...', 'info');
+
+        // 删除所有处于ERROR状态的APP
+        for (const app of apps) {
+          // 只删除处于ERROR状态的APP
+          if (app.state === 'ERROR') {
+            // 检查是否已取消
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+
+            const appName = app.name;
+            const encodedAppName = encodeURIComponent(appName);
+            const deleteUrl = DATABRICKS_HOST + '/api/2.0/apps/' + encodedAppName;
+
+            sendLog('正在删除处于ERROR状态的APP: ' + appName, 'info');
+
+            const deleteResponse = await fetch(deleteUrl, {
+              method: 'DELETE',
+              headers: {
+                'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
+                'Content-Type': 'application/json',
+              }
+            });
+
+            // 检查是否已取消
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+
+            if (!deleteResponse.ok) {
+              const errorText = await deleteResponse.text();
+              sendLog('删除APP ' + appName + ' 失败: ' + errorText, 'error');
+              throw new Error('删除APP ' + appName + ' 失败: ' + errorText);
+            }
+
+            sendLog('成功发送删除APP请求: ' + appName, 'success');
+          }
+        }
+
+        // 循环检查APP是否已删除，每35秒检查一次，直到删除完毕
+        sendLog('开始检查APP是否已删除...', 'info');
+        let remainingApps;
+        do {
+          // 检查是否已取消
+          if (isCancelled()) {
+            sendLog('操作已被用户取消', 'warning');
+            throw new Error('操作已被用户取消');
+          }
+
+          sendLog('等待35秒后检查APP删除状态...', 'info');
+          // 等待35秒，但也要能响应取消
+          for (let i = 0; i < 35; i++) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+          }
+
+          remainingApps = await getAppsList(config);
+          // 只计算仍处于ERROR状态的APP
+          const errorApps = remainingApps.filter(app => app.state === 'ERROR');
+          if (errorApps.length > 0) {
+            sendLog('仍有 ' + errorApps.length + ' 个处于ERROR状态的APP未删除，继续等待...', 'warning');
+          } else {
+            sendLog('所有处于ERROR状态的APP已成功删除', 'success');
+          }
+        } while (remainingApps.some(app => app.state === 'ERROR') && !isCancelled());
+      } else {
+        // 如果没有ERROR状态的APP，直接结束流程
+        sendLog('没有发现处于ERROR状态的APP，跳过删除和创建步骤，流程结束', 'info');
+        stopHeartbeat(); // 停止心跳
+        return {
+          success: true,
+          message: '没有发现处于ERROR状态的APP，跳过删除和创建步骤',
+          attempts: 0
+        };
+      }
+    }
+
+    // 检查是否已取消
+    if (isCancelled()) {
+      sendLog('操作已被用户取消', 'warning');
+      throw new Error('操作已被用户取消');
+    }
+
+    // 创建新的APP
+    const createUrl = DATABRICKS_HOST + '/api/2.0/apps';
+    // 将APP名称改为小写"us"
+    const newAppName = "us";
+
+    // 这里使用一个简单的示例配置创建APP
+    const appConfig = {
+      name: newAppName,
+      spec: {
+        resources: {
+          cpu: 0.5,
+          memory: "1Gi"
+        },
+        serve: {
+          endpoint: {
+            name: "api",
+            type: "HTTP",
+            port: 8080,
+            route: "/",
+            timeout: "30s"
+          }
+        }
+      }
+    };
+
+    sendLog('开始尝试创建新APP: ' + newAppName, 'info');
+
+    // 循环尝试创建APP，最多尝试200次
+    while (creationAttempts < maxCreationAttempts && !isCancelled()) {
+      // 检查是否已取消
+      if (isCancelled()) {
+        sendLog('操作已被用户取消', 'warning');
+        throw new Error('操作已被用户取消');
+      }
+
+      creationAttempts++;
+      sendLog('第 ' + creationAttempts + ' 次尝试创建APP...', 'info');
+
+      // 每10次尝试后断开连接并重新开始
+      if (creationAttempts % 10 === 0) {
+        sendLog('已尝试创建APP ' + creationAttempts + ' 次，为避免请求过多，将断开连接并重新开始...', 'info');
+        // 发送重新开始信号
+        if (logStream && !logStream.isClosed()) {
+          try {
+            logStream.send(JSON.stringify({
+              type: 'restart',
+              message: '为避免请求过多，断开连接并重新开始创建流程',
+              restart: true
+            }));
+          } catch (e) {
+            // 发送失败可能是因为连接已关闭
+          }
+        }
+        // 停止心跳
+        stopHeartbeat();
+        // 返回重启信号
+        return {
+          restart: true,
+          message: '为避免请求过多，断开连接并重新开始创建流程',
+          attempts: creationAttempts
+        };
+      }
+
+      const createResponse = await fetch(createUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(appConfig)
+      });
+
+      // 检查是否已取消
+      if (isCancelled()) {
+        sendLog('操作已被用户取消', 'warning');
+        throw new Error('操作已被用户取消');
+      }
+
+      const responseText = await createResponse.text();
+
+      if (createResponse.ok) {
+        sendLog('第 ' + creationAttempts + ' 次尝试创建APP成功', 'success');
+
+        let createdApp;
+        try {
+          createdApp = JSON.parse(responseText);
+        } catch (e) {
+          sendLog("创建APP响应: " + responseText, 'info');
+          throw new Error('无法解析创建APP的响应: ' + e.message);
+        }
+
+        sendLog('成功创建APP: ' + createdApp.name, 'success');
+
+        // 检查APP状态，如果发现错误则删除并重新创建
+        sendLog('检查新创建的APP状态...', 'info');
+        let retries = 0;
+        const maxRetries = 3;
+        let appStatus = null;
+
+        do {
+          // 检查是否已取消
+          if (isCancelled()) {
+            sendLog('操作已被用户取消', 'warning');
+            throw new Error('操作已被用户取消');
+          }
+
+          try {
+            // 等待一段时间让APP初始化
+            sendLog('等待30秒后检查APP状态...', 'info');
+            // 等待30秒，但也要能响应取消
+            for (let i = 0; i < 30; i++) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              if (isCancelled()) {
+                sendLog('操作已被用户取消', 'warning');
+                throw new Error('操作已被用户取消');
+              }
+            }
+
+            // 获取APP详细信息
+            const appDetailsUrl = DATABRICKS_HOST + '/api/2.0/apps/' + newAppName;
+            const appDetailsResponse = await fetch(appDetailsUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
+                'Content-Type': 'application/json',
+              }
+            });
+
+            // 检查是否已取消
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+
+            if (appDetailsResponse.ok) {
+              const appDetails = await appDetailsResponse.json();
+              appStatus = appDetails.compute_status?.state || 'UNKNOWN';
+              sendLog('APP ' + newAppName + ' 当前状态: ' + appStatus, 'info');
+
+              // 检查是否有错误状态
+              if (appStatus === 'ERROR' || appStatus === 'FAILED') {
+                sendLog('APP ' + newAppName + ' 处于错误状态，准备删除并重新创建...', 'warning');
+
+                // 删除出错的APP
+                const encodedAppName = encodeURIComponent(newAppName);
+                const deleteUrl = DATABRICKS_HOST + '/api/2.0/apps/' + encodedAppName;
+
+                const deleteResponse = await fetch(deleteUrl, {
+                  method: 'DELETE',
+                  headers: {
+                    'Authorization': 'Bearer ' + DATABRICKS_TOKEN,
+                    'Content-Type': 'application/json',
+                  }
+                });
+
+                // 检查是否已取消
+                if (isCancelled()) {
+                  sendLog('操作已被用户取消', 'warning');
+                  throw new Error('操作已被用户取消');
+                }
+
+                if (!deleteResponse.ok) {
+                  const errorText = await deleteResponse.text();
+                  sendLog('删除出错的APP ' + newAppName + ' 失败: ' + errorText, 'error');
+                  throw new Error('删除出错的APP ' + newAppName + ' 失败: ' + errorText);
+                }
+
+                sendLog('已删除出错的APP: ' + newAppName, 'success');
+
+                // 等待删除完成
+                sendLog('等待35秒后重新创建APP...', 'info');
+                // 等待35秒，但也要能响应取消
+                for (let i = 0; i < 35; i++) {
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  if (isCancelled()) {
+                    sendLog('操作已被用户取消', 'warning');
+                    throw new Error('操作已被用户取消');
+                  }
+                }
+
+                // 重新开始创建循环
+                break;
+              } else if (appStatus === 'STARTING') {
+                // 如果APP状态是STARTING，等待30秒后再次检查
+                sendLog('APP ' + newAppName + ' 正在启动中，30秒后再次检查状态...', 'info');
+
+                // 等待30秒，但也要能响应取消
+                for (let i = 0; i < 30; i++) {
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  if (isCancelled()) {
+                    sendLog('操作已被用户取消', 'warning');
+                    throw new Error('操作已被用户取消');
+                  }
+                }
+
+                // 继续下一次循环检查状态
+                continue;
+              } else if (appStatus === 'ACTIVE' || appStatus === 'DEPLOYING') {
+                // APP状态正常，跳出循环
+                sendLog('APP创建完成且状态正常: ' + appStatus, 'success');
+                stopHeartbeat(); // 停止心跳
+                return {
+                  success: true,
+                  app: createdApp,
+                  message: 'APP创建成功',
+                  status: appStatus,
+                  attempts: creationAttempts
+                };
+              }
+            } else {
+              const errorText = await appDetailsResponse.text();
+              sendLog('获取APP详情失败，状态码: ' + appDetailsResponse.status + ' 错误信息: ' + errorText, 'error');
+              // 如果是请求过多错误，则等待更长时间再重试
+              if (appDetailsResponse.status === 429 || errorText.includes('Too many subrequests')) {
+                sendLog('检测到请求过多，等待60秒后重试...', 'warning');
+                for (let i = 0; i < 60; i++) {
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  if (isCancelled()) {
+                    sendLog('操作已被用户取消', 'warning');
+                    throw new Error('操作已被用户取消');
+                  }
+                }
+
+                // 如果重试后仍然有请求过多错误，我们跳出当前循环，让外层循环重新开始
+                sendLog('请求过多错误持续存在，将重新开始创建流程...', 'warning');
+                break;
+              }
+            }
+          } catch (error) {
+            // 检查是否已取消
+            if (isCancelled()) {
+              sendLog('操作已被用户取消', 'warning');
+              throw new Error('操作已被用户取消');
+            }
+
+            sendLog('检查APP状态时出错: ' + error.message, 'error');
+
+            // 如果是请求过多错误，则等待更长时间再重试
+            if (error.message.includes('Too many subrequests')) {
+              sendLog('检测到请求过多，等待60秒后重试...', 'warning');
+              for (let i = 0; i < 60; i++) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                if (isCancelled()) {
+                  sendLog('操作已被用户取消', 'warning');
+                  throw new Error('操作已被用户取消');
+                }
+              }
+
+              // 如果重试后仍然有请求过多错误，我们跳出当前循环，让外层循环重新开始
+              sendLog('请求过多错误持续存在，将重新开始创建流程...', 'warning');
+              break;
+            }
+          }
+
+          retries++;
+        } while (retries < maxRetries && !isCancelled());
+
+        if (retries >= maxRetries) {
+          sendLog('APP状态检查达到最大重试次数，可能存在异常', 'warning');
+          // 如果达到最大重试次数，返回成功但带有警告
+          stopHeartbeat(); // 停止心跳
+          return {
+            success: true,
+            app: createdApp,
+            message: 'APP创建成功，但状态检查达到最大重试次数',
+            status: appStatus,
+            attempts: creationAttempts
+          };
+        }
+      } else if (responseText.includes("maximum number of apps")) {
+        sendLog('第 ' + creationAttempts + ' 次尝试创建APP失败，仍检测到APP数量限制，继续重试...', 'warning');
+        // 等待一段时间再重试，但也要能响应取消
+        for (let i = 0; i < 35; i++) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          if (isCancelled()) {
+            sendLog('操作已被用户取消', 'warning');
+            throw new Error('操作已被用户取消');
+          }
+        }
+      } else {
+        sendLog('第 ' + creationAttempts + ' 次尝试创建APP失败: ' + responseText, 'error');
+        throw new Error('创建APP失败: ' + responseText);
+      }
+    }
+
+    // 检查是否已取消
+    if (isCancelled()) {
+      sendLog('操作已被用户取消', 'warning');
+      throw new Error('操作已被用户取消');
+    }
+
+    // 如果达到最大尝试次数仍未成功
+    if (creationAttempts >= maxCreationAttempts) {
+      sendLog('创建APP失败，已达到最大尝试次数 ' + maxCreationAttempts, 'error');
+      throw new Error('创建APP失败，已达到最大尝试次数 ' + maxCreationAttempts);
+    }
+  } catch (error) {
+    sendLog('创建APP过程中出错: ' + error.message, 'error');
+    stopHeartbeat(); // 停止心跳
+    throw error;
+  } finally {
+    stopHeartbeat(); // 确保停止心跳
+  }
+}
+
+// 处理创建APP的WebSocket连接
+async function handleCreateAppWebSocket(request, env) {
+  const webSocketPair = new WebSocketPair();
+  const [client, server] = Object.values(webSocketPair);
+
+  // 创建一个可取消的标记
+  const abortController = new AbortController();
+
+  // 创建一个包含send方法的对象来模拟流
+  const logStream = {
+    send: (message) => {
+      try {
+        if (server.readyState === WebSocket.READY_STATE_OPEN) {
+          server.send(message);
+        }
+      } catch (e) {
+        console.error('WebSocket发送消息失败:', e);
+      }
+    },
+    isClosed: () => abortController.signal.aborted
+  };
+
+  // 监听连接关闭事件
+  server.addEventListener('close', () => {
+    console.log('WebSocket连接已关闭，触发取消信号');
+    abortController.abort();
+  });
+
+  server.addEventListener('error', () => {
+    console.log('WebSocket连接错误，触发取消信号');
+    abortController.abort();
+  });
+
+  server.accept();
+
+  // 启动APP创建过程
+  const config = getConfig(env);
+
+  // 在后台执行APP创建任务
+  (async () => {
+    try {
+      const result = await handleCreateOrReplaceApp(config, logStream);
+      if (!abortController.signal.aborted) {
+        server.send(JSON.stringify({
+          type: 'complete',
+          success: true,
+          message: 'APP创建完成',
+          result: result
+        }));
+      }
+    } catch (error) {
+      // 只有在连接未关闭且不是取消操作的情况下才发送错误信息
+      if (!abortController.signal.aborted && !error.message.includes('操作已被用户取消')) {
+        try {
+          server.send(JSON.stringify({
+            type: 'complete',
+            success: false,
+            error: error.message
+          }));
+        } catch (e) {
+          console.error('发送错误信息失败:', e);
+        }
+      }
+    } finally {
+      try {
+        if (server.readyState === WebSocket.READY_STATE_OPEN) {
+          server.close();
+        }
+      } catch (e) {
+        console.error('关闭WebSocket连接时出错:', e);
+      }
+    }
+  })();
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client,
+  });
 }
 
 // 测试通知函数
@@ -1123,6 +1938,38 @@ export default {
         });
       }
     }
+
+    // 处理创建/替换APP请求的路由
+    if (path === '/create-app') {
+      // 检查是否是WebSocket升级请求
+      const upgradeHeader = request.headers.get('Upgrade');
+      if (upgradeHeader === 'websocket') {
+        return handleCreateAppWebSocket(request, env);
+      }
+
+      // 保持原有的POST请求处理
+      try {
+        const config = getConfig(env);
+        const result = await handleCreateOrReplaceApp(config);
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'APP创建成功',
+          app: result.app,
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: error.message
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }    
     
     return new Response(JSON.stringify({
       error: '路由不存在',
@@ -1133,7 +1980,8 @@ export default {
         { path: '/check-argo', method: 'GET', description: '检查 ARGO 域名状态' },
         { path: '/start', method: 'POST', description: '手动启动所有停止的 Apps' },
         { path: '/config', method: 'GET', description: '查看当前配置信息' },
-        { path: '/test-notification', method: 'POST', description: '测试 Telegram 通知' }
+        { path: '/test-notification', method: 'POST', description: '测试 Telegram 通知' },
+        { path: '/create-app', method: 'POST', description: '创建/替换 APP' }
       ]
     }), {
       status: 404,
