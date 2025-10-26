@@ -546,8 +546,12 @@ class MultiAccountManager:
                 else:
                     status = "❌" # 失败
                 
-                # 隐藏邮箱部分字符以保护隐私
-                masked_email = email[:3] + "***" + email[email.find("@"):]
+                # 隐藏用户邮箱前缀以保护隐私
+                at_index = email.find("@")
+                username = email[:at_index]
+                domain = email[at_index:]
+                masked_email = f"<tg-spoiler>{username}</tg-spoiler>{domain}"
+
                 message += f"<strong>账号: <code>{masked_email}</code></strong>\n"
                 message += f"{status} {result}\n💰 当前余额：{balance}\n"
                 if index < total_count - 1:
@@ -621,3 +625,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
