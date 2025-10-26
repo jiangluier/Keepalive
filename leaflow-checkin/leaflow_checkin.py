@@ -363,7 +363,7 @@ class LeaflowAutoCheckin:
         click_result = self.find_and_click_checkin_button()
         
         if click_result == "ALREADY_CHECKED_IN":
-            return "⏳ 今日已签到"
+            return "今日已签到"
         if click_result != "CLICK_SUCCESS":
             raise Exception("⚠️ 找不到立即签到按钮或按钮不可点击")
         
@@ -522,21 +522,23 @@ class MultiAccountManager:
             return
         
         try:
-            SUCCESS_MSG = "⏳ 今日已签到"
+            SUCCESS_MSG = "今日已签到"
             script_success_count = sum(1 for _, success, result, _ in results if success and result != SUCCESS_MSG)  # 脚本签到的账号数量
             already_checked_count = sum(1 for _, _, result, _ in results if result == SUCCESS_MSG)  # 手动签到的账号数量
             failure_count = sum(1 for _, success, _, _ in results if not success)  # 签到失败的账号数量
             total_success_count = already_checked_count + script_success_count  # 签到成功的账号数量 (含已手动签到)
             total_count = len(results)  # 账号总数量
 
-            message = f"🎁 Leaflow自动签到通知\n\n"
+            message = f"🎁 <strong>Leaflow自动签到通知</strong>\n"
+            message += f"==================================\n"
             message += f"📋 共处理账号: {total_count} 个，其中：\n"
             message += f"👏 手动签到: {already_checked_count} 个\n"
             message += f"🚀 脚本签到: {script_success_count} 个\n"
             message += f"✅ 签到成功: {total_success_count} 个\n"
-            message += f"❌ 签到失败: {failure_count} 个\n\n"
+            message += f"❌ 签到失败: {failure_count} 个\n"
+            message += f"==================================\n"
          
-            for email, success, result, balance in results:
+            for index, (email, success, result, balance) in enumerate(results):
                 if success and result != SUCCESS_MSG:
                     status = "✅" # 脚本签到
                 elif result == SUCCESS_MSG:
@@ -546,8 +548,10 @@ class MultiAccountManager:
                 
                 # 隐藏邮箱部分字符以保护隐私
                 masked_email = email[:3] + "***" + email[email.find("@"):]
-                message += f"{status} 账号 {masked_email}:\n"
-                message += f"{result}, 💰 当前余额：{balance}\n\n"
+                message += f"<strong>账号: <code>{masked_email}</code></strong>\n"
+                message += f"{status} {result}\n💰 当前余额：{balance}\n"
+                if index < total_count - 1:
+                    message += f"----------------------------------\n"
             
             url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
             data = {
