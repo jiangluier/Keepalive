@@ -530,13 +530,13 @@ class MultiAccountManager:
             total_count = len(results)  # 账号总数量
 
             message = f"🎁 <strong>Leaflow自动签到通知</strong>\n"
-            message += f"==================================\n"
+            message += f"=========================\n"
             message += f"📋 共处理账号: {total_count} 个，其中：\n"
             message += f"👏 手动签到: {already_checked_count} 个\n"
             message += f"🚀 脚本签到: {script_success_count} 个\n"
             message += f"✅ 签到成功: {total_success_count} 个\n"
             message += f"❌ 签到失败: {failure_count} 个\n"
-            message += f"==================================\n"
+            message += f"=========================\n"
          
             for index, (email, success, result, balance) in enumerate(results):
                 if success and result != SUCCESS_MSG:
@@ -550,12 +550,12 @@ class MultiAccountManager:
                 at_index = email.find("@")
                 username = email[:at_index]
                 domain = email[at_index:]
-                masked_email = f"<tg-spoiler>{username}</tg-spoiler>{domain}"
+                masked_email = f"<tg-spoiler><code>{username}</code></tg-spoiler><code>{domain}</code>"
 
-                message += f"<strong>账号: <code>{masked_email}</code></strong>\n"
+                message += f"<strong>账号:</strong> {masked_email}\n"
                 message += f"{status} {result}\n💰 当前余额：{balance}\n"
                 if index < total_count - 1:
-                    message += f"----------------------------------\n"
+                    message += f"-------------------------------------------\n"
             
             url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
             data = {
@@ -625,4 +625,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
