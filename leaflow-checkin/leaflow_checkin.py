@@ -547,7 +547,7 @@ class MultiAccountManager:
                     status = "❌" # 失败
                 
                 # 签到详情消息
-                message += f"<strong>账号:</strong> <code>{email}<code>\n"
+                message += f"<strong>账号:</strong> <code>{email}</code>\n"
                 message += f"{status} {result}\n💰 当前余额：{balance}\n"
                 if index < total_count - 1:
                     message += f"-------------------------------------------\n"
@@ -620,6 +620,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
