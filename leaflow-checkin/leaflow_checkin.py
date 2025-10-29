@@ -550,7 +550,7 @@ class MultiAccountManager:
                 message += f"<strong>账号:</strong> <code>{email}</code>\n"
                 message += f"{status} {result}\n💰 当前余额：{balance}\n"
                 if index < total_count - 1:
-                    message += f"-------------------------------------------\n"
+                    message += f"-------------------------------\n"
             
             url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
             data = {
@@ -620,6 +620,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
