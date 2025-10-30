@@ -13,7 +13,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import TimeoutException
 import requests
+from datetime import datetime
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -61,7 +63,7 @@ class LeaflowAutoCheckin:
         self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
     def close_popup(self):
-        """关闭初始弹窗 - 通过点击外部区域"""
+        """关闭初始弹窗"""
         try:
             logger.info("👉 尝试关闭初始弹窗...")
             time.sleep(3)  # 等待弹窗加载
@@ -101,7 +103,7 @@ class LeaflowAutoCheckin:
         
         # 访问登录页面
         self.driver.get(self.LOGIN_URL)
-        time.sleep(5)  # 增加初始等待时间
+        time.sleep(5)
         
         # 关闭弹窗
         self.close_popup()
@@ -226,6 +228,54 @@ class LeaflowAutoCheckin:
                 raise Exception("⚠️ 登录超时，无法确认登录状态")
             except Exception as e:
                 raise e
+
+    def get_balance(self):
+        """获取当前账号的总余额"""
+        try:
+            logger.info("获取账号余额...")
+            
+            # 跳转到仪表板页面
+            self.driver.get("https://leaflow.net/dashboard")
+            time.sleep(3)
+            
+            # 等待页面加载
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            
+            # 尝试多种选择器查找余额元素
+            balance_selectors = [
+                "//*[contains(text(), '¥') or contains(text(), '￥') or contains(text(), '元')]",
+                "//*[contains(@class, 'balance')]",
+                "//*[contains(@class, 'money')]",
+                "//*[contains(@class, 'amount')]",
+                "//button[contains(@class, 'dollar')]",
+                "//span[contains(@class, 'font-medium')]"
+            ]
+            
+            for selector in balance_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    for element in elements:
+                        text = element.text.strip()
+                        # 查找包含数字和货币符号的文本
+                        if any(char.isdigit() for char in text) and ('¥' in text or '￥' in text or '元' in text):
+                            # 提取数字部分
+                            import re
+                            numbers = re.findall(r'\d+\.?\d*', text)
+                            if numbers:
+                                balance = numbers[0]
+                                logger.info(f"找到余额: {balance}元")
+                                return f"{balance}元"
+                except:
+                    continue
+            
+            logger.warning("未找到余额信息")
+            return "未知"
+            
+        except Exception as e:
+            logger.warning(f"获取余额时出错: {e}")
+            return "未知"
     
     def wait_for_checkin_page_loaded(self, max_retries=None, wait_time=None):
         """等待签到页面完全加载，支持重试"""
@@ -313,7 +363,7 @@ class LeaflowAutoCheckin:
         click_result = self.find_and_click_checkin_button()
         
         if click_result == "ALREADY_CHECKED_IN":
-            return "⏳ 今日已手动签到"
+            return "今日已签到"
         if click_result != "CLICK_SUCCESS":
             raise Exception("⚠️ 找不到立即签到按钮或按钮不可点击")
         
@@ -380,14 +430,17 @@ class LeaflowAutoCheckin:
                 # 签到
                 result = self.checkin()
                 logger.info(f"📋 签到结果: {result}")
-                return True, result
+                # 获取余额
+                balance = self.get_balance()
+                logger.info(f"📋 签到结果: {result}, 💰 余额: {balance}")
+                return True, result, balance
             else:
                 raise Exception("❌ 登录失败")
                 
         except Exception as e:
             error_msg = f"❌ 自动签到失败: {str(e)}"
             logger.error(error_msg)
-            return False, error_msg
+            return False, error_msg, "未知"
         
         finally:
             if self.driver:
@@ -469,21 +522,23 @@ class MultiAccountManager:
             return
         
         try:
-            SUCCESS_MSG = "⏳ 今日已手动签到"
-            script_success_count = sum(1 for _, success, result in results if success and result != SUCCESS_MSG)  # 脚本签到的账号数量
-            already_checked_count = sum(1 for _, _, result in results if result == SUCCESS_MSG)  # 手动签到的账号数量
-            failure_count = sum(1 for _, success, _ in results if not success)  # 签到失败的账号数量
+            SUCCESS_MSG = "今日已签到"
+            script_success_count = sum(1 for _, success, result, _ in results if success and result != SUCCESS_MSG)  # 脚本签到的账号数量
+            already_checked_count = sum(1 for _, _, result, _ in results if result == SUCCESS_MSG)  # 手动签到的账号数量
+            failure_count = sum(1 for _, success, _, _ in results if not success)  # 签到失败的账号数量
             total_success_count = already_checked_count + script_success_count  # 签到成功的账号数量 (含已手动签到)
             total_count = len(results)  # 账号总数量
 
-            message = f"🎁 Leaflow自动签到通知\n\n"
+            message = f"🎁 <strong>Leaflow自动签到通知</strong>\n"
+            message += f"=========================\n"
             message += f"📋 共处理账号: {total_count} 个，其中：\n"
             message += f"👏 手动签到: {already_checked_count} 个\n"
             message += f"🚀 脚本签到: {script_success_count} 个\n"
             message += f"✅ 签到成功: {total_success_count} 个\n"
-            message += f"❌ 签到失败: {failure_count} 个\n\n"
+            message += f"❌ 签到失败: {failure_count} 个\n"
+            message += f"=========================\n"
          
-            for email, success, result in results:
+            for index, (email, success, result, balance) in enumerate(results):
                 if success and result != SUCCESS_MSG:
                     status = "✅" # 脚本签到
                 elif result == SUCCESS_MSG:
@@ -491,9 +546,11 @@ class MultiAccountManager:
                 else:
                     status = "❌" # 失败
                 
-                # 隐藏邮箱部分字符以保护隐私
-                masked_email = email[:3] + "***" + email[email.find("@"):]
-                message += f"{status} {masked_email}: {result}\n"
+                # 签到详情消息
+                message += f"<strong>账号:</strong> <code>{email}</code>\n"
+                message += f"{status} {result}\n💰 当前余额：{balance}\n"
+                if index < total_count - 1:
+                    message += f"-------------------------------\n"
             
             url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
             data = {
@@ -522,8 +579,8 @@ class MultiAccountManager:
             
             try:
                 auto_checkin = LeaflowAutoCheckin(account['email'], account['password'])
-                success, result = auto_checkin.run()
-                results.append((account['email'], success, result))
+                success, result, balance = auto_checkin.run()
+                results.append((account['email'], success, result, balance))
                 
                 # 在账号之间添加间隔，避免请求过于频繁
                 if i < len(self.accounts):
@@ -534,13 +591,13 @@ class MultiAccountManager:
             except Exception as e:
                 error_msg = f"❌ 处理账号时发生异常: {str(e)}"
                 logger.error(error_msg)
-                results.append((account['email'], False, error_msg))
+                results.append((account['email'], False, error_msg, "未知"))
         
         # 发送汇总通知
         self.send_notification(results)
         
         # 返回总体结果
-        success_count = sum(1 for _, success, _ in results if success)
+        success_count = sum(1 for _, success, _, _ in results if success)
         return success_count == len(self.accounts), results
 
 def main():
@@ -548,12 +605,12 @@ def main():
     try:
         manager = MultiAccountManager()
         overall_success, detailed_results = manager.run_all()
+        success_count = sum(1 for _, success, _, _ in detailed_results if success)
         
         if overall_success:
             logger.info("✅ 所有账号签到成功")
             exit(0)
         else:
-            success_count = sum(1 for _, success, _ in detailed_results if success)
             logger.warning(f"⚠️ 部分账号签到失败: {success_count}/{len(detailed_results)} 成功")
             exit(0)
             
@@ -563,4 +620,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
 
