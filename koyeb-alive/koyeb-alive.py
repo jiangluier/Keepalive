@@ -121,7 +121,7 @@ def main():
         proxy_config = get_proxy_config()
 
         if not koyeb_accounts:
-            raise ValueError("环境变量 KOYEB_ACCOUNTS 解析后为空列表。")
+            raise ValueError("环境变量 KOYEB_ACCOUNTS 解析后为空列表")
 
         results = []
         current_time = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -155,7 +155,6 @@ def main():
             results.append(f"账户: `{email}`\n{status_line}\n")
 
         summary = f"📊 总计: {total_accounts} 个账户\n✅ 成功: {success_count} 个 | ❌ 失败: {total_accounts - success_count} 个\n"
-        # 使用 join 方法构建最终消息，更高效
         report_body = "".join(results)
         tg_message = f"🤖 **Koyeb 登录状态报告**\n\n⏰ **检查时间**: {current_time}\n\n{summary}\n{report_body}"
 
@@ -163,11 +162,17 @@ def main():
         send_tg_message(tg_message)
         logging.info("脚本执行完毕。")
 
+        if success_count == 0 and total_accounts > 0:
+            logging.error("所有账户登录失败，脚本将以非零状态码退出")
+            import sys
+            sys.exit(1)
+
     except Exception as e:
-        # 捕获启动阶段的错误 (如环境变量验证失败)
         error_message = f"❌ 程序初始化失败: {e}"
         logging.error(error_message)
         send_tg_message(error_message)
-
+        import sys
+        sys.exit(1)
+        
 if __name__ == "__main__":
     main()
