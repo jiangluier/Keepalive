@@ -16,6 +16,24 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+# --- 设置代理 ---
+def get_proxy_config() -> Dict[str, str]:
+    """从环境变量获取 SOCKS5 代理配置，并格式化为 requests 库所需的字典。"""
+    proxy_env = os.getenv("SOCKS5_PROXY")
+    
+    if not proxy_env:
+        logging.info("环境变量 SOCKS5_PROXY 未设置，不使用代理。")
+        return {}
+
+    proxy_url = f"socks5://{proxy_env}"
+    
+    proxies = {
+        "http": proxy_url,
+        "https": proxy_url
+    }
+    logging.info(f"已加载 SOCKS5 代理配置：{proxy_url}")
+    return proxies
+    
 def validate_and_load_accounts() -> List[Dict[str, str]]:
     # 一次性检查所有必要的环境变量，尽早失败
     tg_bot_token = os.getenv("TG_BOT_TOKEN")
@@ -59,7 +77,7 @@ def send_tg_message(message: str) -> Optional[Dict[str, Any]]:
         logging.error(f"发送 Telegram 消息失败: {e}")
         return None
 
-def login_to_koyeb(email: str, password: str) -> Tuple[bool, str]:
+def login_to_koyeb(email: str, password: str, proxies: Dict[str, str]) -> Tuple[bool, str]:
     if not email or not password:
         return False, "邮箱或密码为空"
 
@@ -73,13 +91,20 @@ def login_to_koyeb(email: str, password: str) -> Tuple[bool, str]:
     }
 
     try:
-        response = requests.post(KOYEB_LOGIN_URL, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        # 使用 proxies 参数进行请求
+        response = requests.post(
+            KOYEB_LOGIN_URL, 
+            headers=headers, 
+            json=payload, 
+            timeout=REQUEST_TIMEOUT, 
+            proxies=proxies
+        )
         response.raise_for_status()
         return True, "登录成功"
     except requests.exceptions.Timeout:
         return False, "请求超时"
     except requests.exceptions.HTTPError as http_err:
-
+        
         # 尝试解析API返回的具体错误信息
         try:
             error_data = http_err.response.json()
@@ -89,10 +114,11 @@ def login_to_koyeb(email: str, password: str) -> Tuple[bool, str]:
             return False, f"HTTP错误 (状态码 {http_err.response.status_code}): {http_err.response.text}"
     except requests.exceptions.RequestException as e:
         return False, f"网络请求异常: {e}"
-
+        
 def main():
     try:
         koyeb_accounts = validate_and_load_accounts()
+        proxy_config = get_proxy_config()
 
         if not koyeb_accounts:
             raise ValueError("环境变量 KOYEB_ACCOUNTS 解析后为空列表。")
@@ -112,10 +138,10 @@ def main():
                 continue
 
             logging.info(f"正在处理第 {index}/{total_accounts} 个账户: {email}")
-            time.sleep(8)  # 保持登录间隔，防止触发速率限制
+            time.sleep(10)  # 保持登录间隔，防止触发速率限制
 
             try:
-                success, message = login_to_koyeb(email, password)
+                success, message = login_to_koyeb(email, password, proxy_config)
                 if success:
                     status_line = f"状态: ✅ {message}"
                     success_count += 1
