@@ -136,26 +136,26 @@ def verify_koyeb_account_status(email: str, pat: str) -> Tuple[bool, str]:
         if is_active and email_validated:
             return True, "活跃且邮箱已验证"
         elif not is_active:
-            return False, f"非活跃 (Flags: {', '.join(flags)})"
+            return False, f"原因: 非活跃 (Flags: {', '.join(flags)})"
         elif not email_validated:
-            return False, "邮箱未验证"
+            return False, "原因: 邮箱未验证"
         else:
-            return False, f"未知账户: {user_info}"
+            return False, f"原因: 未知账户: {user_info}"
 
 
     except requests.exceptions.HTTPError as http_err:
         try:
             error_data = http_err.response.json()
             error_message = error_data.get('error', http_err.response.text)
-            return False, f"❌ API错误 (状态码 {http_err.response.status_code}): {error_message}"
+            return False, f"原因: API错误 (状态码 {http_err.response.status_code}): {error_message}"
         except json.JSONDecodeError:
-            return False, f"❌ HTTP错误 (状态码 {http_err.response.status_code}): {http_err.response.text}"
+            return False, f"原因: HTTP错误 (状态码 {http_err.response.status_code}): {http_err.response.text}"
     except requests.exceptions.Timeout:
-        return False, "❌ 请求超时"
+        return False, "原因: 请求超时"
     except requests.exceptions.RequestException as e:
-        return False, f"❌ 网络请求异常: {e}"
+        return False, f"原因: 网络请求异常: {e}"
     except Exception as e:
-        return False, f"❌ 处理响应时发生异常: {e}"
+        return False, f"原因: 处理响应时发生异常: {e}"
         
 def main():
     try:
@@ -186,10 +186,10 @@ def main():
                     status_line = f"状态: ✅, {message}"
                     success_count += 1
                 else:
-                    status_line = f"状态: ❌\n{message}"
+                    status_line = f"状态: ❌ 验证失败\n  {message}"
             except Exception as e:
                 logging.error(f"❌ 处理账户 {email} 时发生未知异常: {e}")
-                status_line = f"状态: ❌\n执行时发生未知异常 - {e}"
+                status_line = f"状态: ❌ 验证失败\n  执行时发生未知异常 - {e}"
 
             results.append(f"账户: `{email}`\n{status_line}\n")
 
