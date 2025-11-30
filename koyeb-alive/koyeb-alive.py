@@ -37,12 +37,9 @@ def validate_and_load_accounts() -> List[Dict[str, str]]:
     从环境变量 KOYEB_LOGIN 加载账户信息。
     格式: "email1:PAT1\nemail2:PAT2"
     """
-    tg_bot_token = os.getenv("TG_BOT_TOKEN")
-    tg_chat_id = os.getenv("TG_CHAT_ID")
     koyeb_login_env = os.getenv("KOYEB_LOGIN")
-
-    if not all([tg_bot_token, tg_chat_id, koyeb_login_env]):
-        raise ValueError("环境变量缺失: 请确保 KOYEB_LOGIN, TG_BOT_TOKEN, 和 TG_CHAT_ID 都已设置。")
+    if not koyeb_login_env:
+        raise ValueError("❌ KOYEB_LOGIN 变量未配置，脚本无法继续执行")
 
     accounts = []
     lines = koyeb_login_env.strip().split('\n') # 按行分割，并处理空行
@@ -50,7 +47,7 @@ def validate_and_load_accounts() -> List[Dict[str, str]]:
     for line in lines:
         line = line.strip()
         if not line or ':' not in line:
-            logging.warning(f"跳过无效或空行: {line}")
+            logging.warning(f"⚠️ 跳过无效或空行: {line}")
             continue
 
         try:
@@ -60,11 +57,11 @@ def validate_and_load_accounts() -> List[Dict[str, str]]:
                 'pat': pat.strip()
             })
         except ValueError:
-            logging.error(f"KOYEB_LOGIN 行格式错误，应为 email:PAT -> {line}")
+            logging.error(f"⚠️ KOYEB_LOGIN 行格式错误，应为 email:PAT -> {line}")
             continue
             
     if not accounts:
-        raise ValueError("KOYEB_LOGIN 环境变量未包含任何有效账户信息。")
+        raise ValueError("KOYEB_LOGIN 环境变量未包含任何有效账户信息")
     
     return accounts
 
@@ -174,11 +171,11 @@ def main():
             pat = account.get('pat', '')
 
             if not email or not pat:
-                logging.warning(f"第 {index}/{total_accounts} 个账户信息不完整，已跳过。")
+                logging.warning(f"⚠️ 第 {index}/{total_accounts} 个账户信息不完整，已跳过。")
                 results.append(f"账户: 未提供邮箱\n状态: ❌ 信息不完整\n")
                 continue
 
-            logging.info(f"正在处理第 {index}/{total_accounts} 个账户: {email}")
+            logging.info(f"🚀 正在处理第 {index}/{total_accounts} 个账户: {email}")
             time.sleep(10)
 
             try:
