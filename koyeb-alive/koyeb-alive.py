@@ -13,17 +13,19 @@ BEIJING_TZ = timezone(timedelta(hours=8))
 
 # --- 日志配置 ---
 class BeijingTimeFormatter(logging.Formatter):
+    def __init__(self, fmt=None, datefmt=None, style='%'):
+        super().__init__(fmt=fmt, datefmt=datefmt, style=style)
     def formatTime(self, record, datefmt=None):
         dt = datetime.fromtimestamp(record.created, BEIJING_TZ)
         if datefmt:
             return dt.strftime(datefmt)
         else:
-            return dt.isoformat()
+            return dt.strftime(self.datefmt)
 
 # 应用北京时间格式化器
 handler = logging.StreamHandler()
 handler.setFormatter(BeijingTimeFormatter(
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 ))
 
