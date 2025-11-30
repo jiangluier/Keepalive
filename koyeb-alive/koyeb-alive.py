@@ -40,7 +40,7 @@ def validate_and_load_accounts() -> List[Dict[str, str]]:
     koyeb_login_env = os.getenv("KOYEB_LOGIN")
     if not koyeb_login_env:
         logging.error(f"❌ KOYEB_LOGIN 变量未配置，脚本无法继续执行")
-        raise ValueError("必须配置 KOYEB_LOGIN 变量")
+        raise ValueError("必须配置 KOYEB_LOGIN 环境变量")
 
     accounts = []
     lines = koyeb_login_env.strip().split('\n') # 按行分割，并处理空行
@@ -86,11 +86,11 @@ def send_tg_message(message: str) -> Optional[Dict[str, Any]]:
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as http_err:
-        logging.error(f"发送 Telegram 消息时发生HTTP错误: {http_err}")
-        logging.error(f"响应内容: {http_err.response.text}")
+        logging.error(f"❌ 发送 Telegram 消息时发生HTTP错误: {http_err}")
+        logging.error(f"❌ 响应内容: {http_err.response.text}")
         return None
     except requests.exceptions.RequestException as e:
-        logging.error(f"发送 Telegram 消息失败: {e}")
+        logging.error(f"❌ 发送 Telegram 消息失败: {e}")
         return None
 
 # --- 账户验证函数 ---
@@ -134,28 +134,28 @@ def verify_koyeb_account_status(email: str, pat: str) -> Tuple[bool, str]:
         is_active = "ACTIVE" in flags
         
         if is_active and email_validated:
-            return True, "账户状态：✅ 活跃且邮箱已验证"
+            return True, "活跃且邮箱已验证"
         elif not is_active:
-            return False, f"账户状态：⚠️ 非活跃 (Flags: {', '.join(flags)})"
+            return False, f"非活跃 (Flags: {', '.join(flags)})"
         elif not email_validated:
-            return False, "账户状态：❌ 邮箱未验证"
+            return False, "邮箱未验证"
         else:
-            return False, f"未知账户状态: {user_info}"
+            return False, f"未知账户: {user_info}"
 
 
     except requests.exceptions.HTTPError as http_err:
         try:
             error_data = http_err.response.json()
             error_message = error_data.get('error', http_err.response.text)
-            return False, f"API错误 (状态码 {http_err.response.status_code}): {error_message}"
+            return False, f"❌ API错误 (状态码 {http_err.response.status_code}): {error_message}"
         except json.JSONDecodeError:
-            return False, f"HTTP错误 (状态码 {http_err.response.status_code}): {http_err.response.text}"
+            return False, f"❌ HTTP错误 (状态码 {http_err.response.status_code}): {http_err.response.text}"
     except requests.exceptions.Timeout:
-        return False, "请求超时"
+        return False, "❌ 请求超时"
     except requests.exceptions.RequestException as e:
-        return False, f"网络请求异常: {e}"
+        return False, f"❌ 网络请求异常: {e}"
     except Exception as e:
-        return False, f"处理响应时发生异常: {e}"
+        return False, f"❌ 处理响应时发生异常: {e}"
         
 def main():
     try:
@@ -172,7 +172,7 @@ def main():
             pat = account.get('pat', '')
 
             if not email or not pat:
-                logging.warning(f"⚠️ 第 {index}/{total_accounts} 个账户信息不完整，已跳过。")
+                logging.warning(f"⚠️ 第 {index}/{total_accounts} 个账户信息不完整，已跳过")
                 results.append(f"账户: 未提供邮箱\n状态: ❌ 信息不完整\n")
                 continue
 
@@ -183,32 +183,32 @@ def main():
                 # 调用验证函数
                 success, message = verify_koyeb_account_status(email, pat)
                 if success:
-                    status_line = f"状态: ✅ {message}"
+                    status_line = f"状态: ✅, {message}"
                     success_count += 1
                 else:
-                    status_line = f"状态: ❌ 验证失败\n原因：{message}"
+                    status_line = f"状态: ❌\n{message}"
             except Exception as e:
-                logging.error(f"处理账户 {email} 时发生未知异常: {e}")
-                status_line = f"状态: ❌ 验证失败\n原因：执行时发生未知异常 - {e}"
+                logging.error(f"❌ 处理账户 {email} 时发生未知异常: {e}")
+                status_line = f"状态: ❌\n执行时发生未知异常 - {e}"
 
             results.append(f"账户: `{email}`\n{status_line}\n")
 
         summary = f"📊 总计: {total_accounts} 个账户\n✅ 成功: {success_count} 个 | ❌ 失败: {total_accounts - success_count} 个\n"
         report_body = "".join(results)
         tg_message = (
-            f"🤖 **Koyeb 账户状态报告**\n"
+            f"🤖 *Koyeb 账户状态报告* 🤖\n"
             f"=======================\n"
-            f"⏰ **检查时间**: {current_time}\n"
+            f"⏰ 检查时间: {current_time}\n"
             f"{summary}\n"
             f"{report_body}"
         )
 
-        logging.info("--- 报告预览 ---\n" + tg_message)
+        logging.info("📊 --- 报告预览 ---\n" + tg_message)
         send_tg_message(tg_message)
-        logging.info("脚本执行完毕。")
+        logging.info("🎉 脚本执行完毕。")
 
         if success_count == 0 and total_accounts > 0:
-            logging.error("所有账户验证失败，脚本将以非零状态码退出")
+            logging.error("❌ 所有账户验证失败，脚本将以非零状态码退出")
             import sys
             sys.exit(1)
 
