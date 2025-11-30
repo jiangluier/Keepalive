@@ -25,8 +25,7 @@ jobs:
     
     - name: Run Koyeb alive script
       env:
-        KOYEB_ACCOUNTS: ${{ secrets.KOYEB_ACCOUNTS }}
-        SOCKS5_PROXY: ${{ secrets.SOCKS5_PROXY }}
+        KOYEB_LOGIN: ${{ secrets.KOYEB_LOGIN }}
         TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
         TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
       run: python koyeb-alive/koyeb-alive.py
