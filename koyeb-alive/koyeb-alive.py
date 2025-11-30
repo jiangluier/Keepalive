@@ -39,7 +39,8 @@ def validate_and_load_accounts() -> List[Dict[str, str]]:
     """
     koyeb_login_env = os.getenv("KOYEB_LOGIN")
     if not koyeb_login_env:
-        raise ValueError("❌ KOYEB_LOGIN 变量未配置，脚本无法继续执行")
+        logging.error(f"❌ KOYEB_LOGIN 变量未配置，脚本无法继续执行")
+        raise ValueError("必须配置 KOYEB_LOGIN 变量")
 
     accounts = []
     lines = koyeb_login_env.strip().split('\n') # 按行分割，并处理空行
@@ -71,7 +72,7 @@ def send_tg_message(message: str) -> Optional[Dict[str, Any]]:
     chat_id = os.getenv("TG_CHAT_ID")
 
     if not bot_token or not chat_id:
-        logging.warning("TG_BOT_TOKEN 或 TG_CHAT_ID 未设置，跳过发送 Telegram 消息。")
+        logging.warning("⚠️ TG_BOT_TOKEN 或 TG_CHAT_ID 未设置，跳过发送 Telegram 消息。")
         return None
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
