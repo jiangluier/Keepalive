@@ -198,7 +198,7 @@ def main():
         tg_message = (
             f"🤖 *Koyeb 账户状态报告* 🤖\n"
             f"=====================\n"
-            f"⏰ 检查时间: {current_time}\n"
+            f"⏰ 日期: {current_time}\n"
             f"{summary}\n"
             f"=====================\n"
             f"{report_body}"
