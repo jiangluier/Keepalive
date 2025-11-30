@@ -193,13 +193,14 @@ def main():
 
             results.append(f"账户: `{email}`\n{status_line}\n")
 
-        summary = f"📊 总计: {total_accounts} 个账户\n✅ 成功: {success_count} 个 | ❌ 失败: {total_accounts - success_count} 个\n"
+        summary = f"📊 总计: {total_accounts} 个账户\n✅ 成功: {success_count} 个 | ❌ 失败: {total_accounts - success_count} 个"
         report_body = "".join(results)
         tg_message = (
             f"🤖 *Koyeb 账户状态报告* 🤖\n"
-            f"=======================\n"
+            f"=====================\n"
             f"⏰ 检查时间: {current_time}\n"
             f"{summary}\n"
+            f"------ 登录详情 ------\n"
             f"{report_body}"
         )
 
