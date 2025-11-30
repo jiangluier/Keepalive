@@ -7,14 +7,26 @@ from typing import List, Dict, Tuple, Any, Optional
 
 # --- 常量定义 ---
 KOYEB_PROFILE_URL = "https://app.koyeb.com/v1/account/profile"
-REQUEST_TIMEOUT = 30  # seconds
+REQUEST_TIMEOUT = 30  # 请求超时，单位：秒
+BEIJING_TZ = timezone(timedelta(hours=8))
 
 # --- 日志配置 ---
-logging.basicConfig(
-    level=logging.INFO,
+class BeijingTimeFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, BEIJING_TZ)
+        if datefmt:
+            return dt.strftime(datefmt)
+        else:
+            return dt.isoformat()
+
+# 应用北京时间格式化器
+handler = logging.StreamHandler()
+handler.setFormatter(BeijingTimeFormatter(
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
-)
+))
+
+logging.basicConfig(level=logging.INFO, handlers=[handler])
 
 # --- 账户加载/验证函数 ---
 def validate_and_load_accounts() -> List[Dict[str, str]]:
@@ -149,7 +161,8 @@ def main():
         koyeb_accounts = validate_and_load_accounts()
         
         results = []
-        current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+        current_time_dt = datetime.now(BEIJING_TZ)
+        current_time = current_time_dt.strftime("%Y-%m-%d %H:%M:%S")
         total_accounts = len(koyeb_accounts)
         success_count = 0
 
