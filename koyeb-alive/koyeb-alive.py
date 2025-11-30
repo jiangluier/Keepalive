@@ -183,7 +183,7 @@ def main():
                 # 调用验证函数
                 success, message = verify_koyeb_account_status(email, pat)
                 if success:
-                    status_line = f"状态: ✅, {message}"
+                    status_line = f"状态: ✅ {message}"
                     success_count += 1
                 else:
                     status_line = f"状态: ❌ 验证失败\n  {message}"
