@@ -4,6 +4,7 @@ import asyncio
 import requests
 from telethon import TelegramClient
 from telethon.tl.custom.message import Message
+from typing import Dict, Any
 
 # Windows 事件循环策略
 if sys.platform == 'win32':
@@ -21,14 +22,14 @@ CHECK_WAIT_TIME = 20                     # 等待机器人回复的时间（秒�
 # ============================================
 
 # 定义颜色和符号 (用于日志美化)
-COLORS = {
-    'red': '\033\033[91m', 'green': '\033[92m', 'yellow': '\033[93m',
+COLORS: Dict[str, str] = {
+    'red': '\033[91m', 'green': '\033[92m', 'yellow': '\033[93m',
     'blue': '\033[94m', 'magenta': '\033[95m', 'cyan': '\033[96m',
     'white': '\033[97m', 'reset': '\033[0m'
 }
-SYMBOLS = {'check': '✓', 'warning': '⚠', 'arrow': '➜', 'error': '✗'}
+SYMBOLS: Dict[str, str] = {'check': '✓', 'warning': '⚠', 'arrow': '➜', 'error': '✗'}
 
-def log(color, symbol, message):
+def log(color: str, symbol: str, message: str):
     """日志函数"""
     print(f"{COLORS[color]}{SYMBOLS[symbol]} {message}{COLORS['reset']}")
 
@@ -42,7 +43,7 @@ def send_tg_notification(status: str, message: str):
     notification_text = f"*CloudCat 签到任务通知*\n\n状态：{emoji} {status}\n频道：`{TG_CHANNEL}`\n详情：{message}"
     
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
-    payload = {
+    payload: Dict[str, Any] = {
         'chat_id': TG_CHAT_ID,
         'text': notification_text,
         'parse_mode': 'Markdown'
@@ -55,16 +56,19 @@ def send_tg_notification(status: str, message: str):
 
 async def check_in():
     """执行频道签到并判断结果的主逻辑"""
-    # 检查必须变量
-    required_vars = {'TG_API_ID': TG_API_ID, 'TG_API_HASH': TG_API_HASH,}
+    
+    # 检查核心登录变量
+    required_vars = {'TG_API_ID': TG_API_ID, 'TG_API_HASH': TG_API_HASH}
     missing_vars = [name for name, val in required_vars.items() if not val]
+    
     if missing_vars:
         err_msg = f"核心登录失败：缺少必要的配置变量: {', '.join(missing_vars)}！请检查 GitHub Secrets 设置"
         log('red', 'error', err_msg)
         send_tg_notification("失败", err_msg)
-        return
+        sys.exit(1) # 缺少关键Secrets，强制退出
 
     session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tg_session.session')
+    
     log('cyan', 'arrow', "启动 Telegram 客户端并尝试以您的身份登录")
     
     try:
@@ -75,7 +79,7 @@ async def check_in():
             SUCCESS_KEYWORD = TG_NAME
             log('cyan', 'arrow', f"成功判断关键词设置为: '{SUCCESS_KEYWORD}'")
 
-            # 2. 连接频道，使用新的变量名 TG_CHANNEL
+            # 2. 连接频道
             channel_entity = await client.get_entity(TG_CHANNEL)
             log('cyan', 'arrow', f"已成功连接频道：{channel_entity.title}")
 
@@ -112,7 +116,8 @@ async def check_in():
         err_msg = f"连接或执行过程中出现严重错误: {type(e).__name__} - {str(e)}"
         log('red', 'error', err_msg)
         send_tg_notification("失败", err_msg)
-        log('yellow', 'warning', "请检查 API 配置、CHANNEL 名称是否正确，或尝试删除旧的 session 文件重新登录")
+        log('yellow', 'warning', "请检查 API 配置、频道名称是否正确，或尝试删除旧的 session 文件重新登录")
+        sys.exit(1) # 强制退出，使 GitHub Action 失败
 
 if __name__ == '__main__':
     log('cyan', 'arrow', "开始执行频道签到任务...")
