@@ -1,7 +1,6 @@
-name: ☁️ CloudCat TG 频道自动签到
+name: CloudCat TG 频道自动签到
 
 on:
-  # 1. 手动触发
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * *' # cron 格式: 分 时 日 月 周
