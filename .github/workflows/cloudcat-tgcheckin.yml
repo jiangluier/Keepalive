@@ -12,7 +12,6 @@ jobs:
     env:
       TG_API_ID: ${{ secrets.TG_API_ID }}
       TG_API_HASH: ${{ secrets.TG_API_HASH }}
-      TG_CHANNEL: ${{ vars.TG_CHANNEL }} # 频道名/ID (可选，已在脚本中设置默认值)
       TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
       TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
 
