@@ -13,7 +13,7 @@ if sys.platform == 'win32':
 # ================= 配置区域 =================
 TG_API_ID = os.getenv('TG_API_ID')
 TG_API_HASH = os.getenv('TG_API_HASH')
-TG_CHANNEL = os.getenv('TG_CHANNEL', 'Cloud Cat Group')     # 签到目标频道名或 @username
+TG_CHANNEL = os.getenv('TG_CHANNEL', '@cloudcatgroup')     # 签到目标频道名或 @username
 TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN') # 你的通知机器人 Token
 TG_CHAT_ID = os.getenv('TG_CHAT_ID')     # 你的个人或群组 Chat ID
 TG_NAME = "yutian-青云志"                 # 你的TG用户名/昵称 (用于匹配机器人回复)
