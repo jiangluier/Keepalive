@@ -115,8 +115,7 @@ async def check_in():
     except Exception as e:
         err_msg = f"连接或执行过程中出现严重错误: {type(e).__name__} - {str(e)}"
         log('red', 'error', err_msg)
-        send_tg_notification("失败", err_msg)
-        log('yellow', 'warning', "请检查 API 配置、频道名称是否正确，或尝试删除旧的 session 文件重新登录")
+        log('yellow', 'warning', "请检查 API 配置、频道名称是否正确，重新生成 session 文件")
         sys.exit(1) # 强制退出，使 GitHub Action 失败
 
 if __name__ == '__main__':
