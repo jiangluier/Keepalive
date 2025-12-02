@@ -5,6 +5,7 @@ import requests
 from telethon import TelegramClient
 from telethon.tl.custom.message import Message
 from typing import Dict, Any
+import re
 
 # Windows 事件循环策略
 if sys.platform == 'win32':
@@ -61,15 +62,13 @@ async def check_in():
     missing_vars = [name for name, val in required_vars.items() if not val]
     
     if missing_vars:
-        err_msg = f"核心登录失败：缺少必要的配置变量: {', '.join(missing_vars)}！请检查 GitHub Secrets 设置"
+        err_msg = f"TG 登录失败：缺少必要的变量: {', '.join(missing_vars)}！请检查 GitHub Secrets 设置"
         log('red', 'error', err_msg)
-        send_tg_notification("失败", err_msg)
-        sys.exit(1) # 缺少关键Secrets，强制退出
+        sys.exit(1)
 
     session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tg_session.session')
     
-    log('cyan', 'arrow', "启动 Telegram 客户端并尝试以您的身份登录")
-    
+    log('cyan', 'arrow', "启动 TG 并尝试登录")
     try:
         async with TelegramClient(session_path, TG_API_ID, TG_API_HASH) as client:
             await client.start()
@@ -91,19 +90,44 @@ async def check_in():
             # 4. 检查最新的消息
             is_success = False
             check_limit = 5 # 检查最近5条消息
+            
+            gained_points = "未知"
+            total_points = "未知"
 
             # 遍历最新的消息
             async for msg in client.iter_messages(channel_entity, limit=check_limit):
-                # 检查发送者是否为目标机器人
-                if isinstance(msg, Message) and msg.sender_id == CHANNEL_BOT_ID:        
-                    # 检查 Bot 的回复内容是否包含 TG_NAME
-                    if msg.text and SUCCESS_KEYWORD in msg.text:
+                if isinstance(msg, Message) and msg.sender_id == CHANNEL_BOT_ID:
+                    # 必须包含昵称 AND (包含 '成功' OR 包含 'successful')
+                    is_nickname_match = SUCCESS_KEYWORD in msg.text if msg.text else False
+                    is_success_word_match = '成功' in msg.text or 'successful' in msg.text if msg.text else False
+                    
+                    if is_nickname_match and is_success_word_match:
                         is_success = True
+                        gained_match = re.search(r'(?:获得|you got)\s*(\d+\.?\d*)\s?⭐', msg.text, re.IGNORECASE)
+                        total_match = re.search(r'(?:当前积分[:：]|current points:\s*)(\d+\.?\d*)\s?⭐', msg.text, re.IGNORECASE)
+                        
+                        if gained_match:
+                            gained_points = f"{gained_match.group(1)}⭐"
+                        
+                        if total_match:
+                            try:
+                                total_score = float(total_match.group(1))
+                                total_points = f"{int(total_score)}⭐" 
+                            except ValueError:
+                                pass # 保持"未知"
+                        
                         break
 
             # 5. 处理结果
             if is_success:
-                final_msg = f"签到成功！机器人（ID: {CHANNEL_BOT_ID}）回复中包含您的用户名：'{SUCCESS_KEYWORD}'"
+                base_msg = f"签到成功！机器人（ID: {CHANNEL_BOT_ID}）回复中包含您的用户名：'{SUCCESS_KEYWORD}'"
+                
+                if gained_points != "未知" or total_points != "未知":
+                    detail_msg = f"\n本次签到积分: {gained_points}\n当前总积分: {total_points}"
+                    final_msg = base_msg + detail_msg
+                else:
+                    final_msg = base_msg # Fallback
+                
                 log('green', 'check', final_msg)
                 send_tg_notification("成功", final_msg)
             else:
