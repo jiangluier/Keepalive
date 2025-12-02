@@ -34,14 +34,12 @@ def log(color, symbol, message):
 
 def send_tg_notification(status: str, message: str):
     """发送 Telegram 消息通知"""
-    # 使用新的变量名 TG_BOT_TOKEN 和 TG_CHAT_ID
     if not (TG_BOT_TOKEN and TG_CHAT_ID):
         log('yellow', 'warning', "未设置 TG_BOT_TOKEN 或 TG_CHAT_ID，跳过通知")
         return
 
     emoji = "✅" if status == "成功" else "❌"
-    # 使用新的变量名 TG_CHANNEL
-    notification_text = f"**CloudCat 签到任务通知**\n\n状态：{emoji} {status}\n频道：`{TG_CHANNEL}`\n详情：{message}"
+    notification_text = f"*CloudCat 签到任务通知*\n\n状态：{emoji} {status}\n频道：`{TG_CHANNEL}`\n详情：{message}"
     
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
     payload = {
@@ -57,8 +55,6 @@ def send_tg_notification(status: str, message: str):
 
 async def check_in():
     """执行频道签到并判断结果的主逻辑"""
-    
-    # 检查所有新的配置变量
     if not all([TG_API_ID, TG_API_HASH, TG_CHANNEL, TG_NAME]):
         err_msg = "缺少必要的 TG_API_ID, TG_API_HASH, TG_CHANNEL 或 TG_NAME 配置！请检查配置"
         log('red', 'error', err_msg)
@@ -66,11 +62,9 @@ async def check_in():
         return
 
     session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tg_session.session')
-    
     log('cyan', 'arrow', "启动 Telegram 客户端并尝试以您的身份登录")
     
     try:
-        # 使用新的变量名 TG_API_ID 和 TG_API_HASH
         async with TelegramClient(session_path, TG_API_ID, TG_API_HASH) as client:
             await client.start()
             
@@ -95,8 +89,7 @@ async def check_in():
             # 遍历最新的消息
             async for msg in client.iter_messages(channel_entity, limit=check_limit):
                 # 检查发送者是否为目标机器人
-                if isinstance(msg, Message) and msg.sender_id == CHANNEL_BOT_ID:
-                    
+                if isinstance(msg, Message) and msg.sender_id == CHANNEL_BOT_ID:        
                     # 检查 Bot 的回复内容是否包含 TG_NAME
                     if msg.text and SUCCESS_KEYWORD in msg.text:
                         is_success = True
