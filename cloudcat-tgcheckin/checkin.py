@@ -53,7 +53,6 @@ def send_tg_notification(status: str, message: str):
     except requests.exceptions.RequestException as e:
         log('red', 'error', f"Telegram 通知发送失败: {e}")
 
-
 async def check_in():
     """执行频道签到并判断结果的主逻辑"""  
     if not all([API_ID, API_HASH, CHANNEL]):
