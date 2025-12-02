@@ -24,8 +24,7 @@ CHECK_WAIT_TIME = 20                     # 等待机器人回复的时间（秒�
 # 定义颜色和符号 (用于日志美化)
 COLORS: Dict[str, str] = {
     'red': '\033[91m', 'green': '\033[92m', 'yellow': '\033[93m',
-    'blue': '\033[94m', 'magenta': '\033[95m', 'cyan': '\033[96m',
-    'white': '\033[97m', 'reset': '\033[0m'
+    'cyan': '\033[96m', 'reset': '\033[0m'
 }
 SYMBOLS: Dict[str, str] = {'check': '✓', 'warning': '⚠', 'arrow': '➜', 'error': '✗'}
 
