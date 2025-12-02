@@ -119,6 +119,6 @@ async def check_in():
         sys.exit(1) # 强制退出，使 GitHub Action 失败
 
 if __name__ == '__main__':
-    log('cyan', 'arrow', "开始执行频道签到任务...")
+    log('cyan', 'arrow', "开始执行频道签到任务")
     asyncio.run(check_in())
     log('green', 'check', "任务结束")
