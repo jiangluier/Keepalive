@@ -10,19 +10,19 @@ if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # ================= 配置区域 =================
-API_ID = os.getenv('API_ID')
-API_HASH = os.getenv('API_HASH')
-CHANNEL = os.getenv('CHANNEL')           # 签到目标频道名或 @username
+TG_API_ID = os.getenv('TG_API_ID')
+TG_API_HASH = os.getenv('TG_API_HASH')
+TG_CHANNEL = os.getenv('TG_CHANNEL')     # 签到目标频道名或 @username
 TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN') # 你的通知机器人 Token
 TG_CHAT_ID = os.getenv('TG_CHAT_ID')     # 你的个人或群组 Chat ID
-
-BOT_ID = 7694509436                        # @CloudCatOfficialBot 的用户 ID
-CHECK_WAIT_TIME = 20                       # 等待机器人回复的时间（秒）
+TG_NAME = "yutian-青云志"                 # 你的TG用户名/昵称 (用于匹配机器人回复)
+CHANNEL_BOT_ID = 7694509436              # @CloudCatOfficialBot 的用户 ID
+CHECK_WAIT_TIME = 20                     # 等待机器人回复的时间（秒）
 # ============================================
 
 # 定义颜色和符号 (用于日志美化)
 COLORS = {
-    'red': '\033[91m', 'green': '\033[92m', 'yellow': '\033[93m',
+    'red': '\033\033[91m', 'green': '\033[92m', 'yellow': '\033[93m',
     'blue': '\033[94m', 'magenta': '\033[95m', 'cyan': '\033[96m',
     'white': '\033[97m', 'reset': '\033[0m'
 }
@@ -34,12 +34,14 @@ def log(color, symbol, message):
 
 def send_tg_notification(status: str, message: str):
     """发送 Telegram 消息通知"""
+    # 使用新的变量名 TG_BOT_TOKEN 和 TG_CHAT_ID
     if not (TG_BOT_TOKEN and TG_CHAT_ID):
         log('yellow', 'warning', "未设置 TG_BOT_TOKEN 或 TG_CHAT_ID，跳过通知")
         return
 
     emoji = "✅" if status == "成功" else "❌"
-    notification_text = f"*CloudCat 签到任务通知*\n\n状态：{emoji} {status}\n频道：`{CHANNEL}`\n详情：{message}"
+    # 使用新的变量名 TG_CHANNEL
+    notification_text = f"**CloudCat 签到任务通知**\n\n状态：{emoji} {status}\n频道：`{TG_CHANNEL}`\n详情：{message}"
     
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
     payload = {
@@ -54,9 +56,11 @@ def send_tg_notification(status: str, message: str):
         log('red', 'error', f"Telegram 通知发送失败: {e}")
 
 async def check_in():
-    """执行频道签到并判断结果的主逻辑"""  
-    if not all([API_ID, API_HASH, CHANNEL]):
-        err_msg = "API_ID, API_HASH, 或 CHANNEL 环境变量未设置！请检查配置"
+    """执行频道签到并判断结果的主逻辑"""
+    
+    # 检查所有新的配置变量
+    if not all([TG_API_ID, TG_API_HASH, TG_CHANNEL, TG_NAME]):
+        err_msg = "缺少必要的 TG_API_ID, TG_API_HASH, TG_CHANNEL 或 TG_NAME 配置！请检查配置"
         log('red', 'error', err_msg)
         send_tg_notification("失败", err_msg)
         return
@@ -66,43 +70,41 @@ async def check_in():
     log('cyan', 'arrow', "启动 Telegram 客户端并尝试以您的身份登录")
     
     try:
-        async with TelegramClient(session_path, API_ID, API_HASH) as client:
+        # 使用新的变量名 TG_API_ID 和 TG_API_HASH
+        async with TelegramClient(session_path, TG_API_ID, TG_API_HASH) as client:
             await client.start()
             
-            # 1. 获取用户账户信息，并以此构造成功关键词
-            me = await client.get_me()
-            user_full_name = f"{me.first_name or ''} {me.last_name or ''}".strip()
-            
-            if not user_full_name:
-                 # 确保即使名字全空，也有一个备用关键词
-                 user_full_name = me.username or "yutian-青云志"
-            
-            SUCCESS_KEYWORD = user_full_name 
-            log('cyan', 'arrow', f"检测到您的用户名为: '{SUCCESS_KEYWORD}'，将以此作为成功判断关键词")
+            # 1. 成功关键词直接使用 TG_NAME
+            SUCCESS_KEYWORD = TG_NAME
+            log('cyan', 'arrow', f"成功判断关键词设置为: '{SUCCESS_KEYWORD}'")
 
-            channel_entity = await client.get_entity(CHANNEL)
+            # 2. 连接频道，使用新的变量名 TG_CHANNEL
+            channel_entity = await client.get_entity(TG_CHANNEL)
             log('cyan', 'arrow', f"已成功连接频道：{channel_entity.title}")
 
-            # 发送签到命令 (单次签到)
+            # 3. 发送签到命令
             log('cyan', 'arrow', "发送签到命令 /checkin")
             sent_message = await client.send_message(channel_entity, '/checkin')
             log('cyan', 'arrow', f"等待 {CHECK_WAIT_TIME} 秒，寻找机器人回复")
             await asyncio.sleep(CHECK_WAIT_TIME)
             
+            # 4. 检查最新的消息
             is_success = False
             check_limit = 5 # 检查最近5条消息
 
             # 遍历最新的消息
             async for msg in client.iter_messages(channel_entity, limit=check_limit):
-                if isinstance(msg, Message) and msg.sender_id == BOT_ID:
+                # 检查发送者是否为目标机器人
+                if isinstance(msg, Message) and msg.sender_id == CHANNEL_BOT_ID:
                     
+                    # 检查 Bot 的回复内容是否包含 TG_NAME
                     if msg.text and SUCCESS_KEYWORD in msg.text:
-                        # 找到包含用户名的机器人回复，判定为成功
                         is_success = True
                         break
 
+            # 5. 处理结果
             if is_success:
-                final_msg = f"签到成功！机器人（ID: {BOT_ID}）回复中包含您的用户名：'{SUCCESS_KEYWORD}'"
+                final_msg = f"签到成功！机器人（ID: {CHANNEL_BOT_ID}）回复中包含您的用户名：'{SUCCESS_KEYWORD}'"
                 log('green', 'check', final_msg)
                 send_tg_notification("成功", final_msg)
             else:
