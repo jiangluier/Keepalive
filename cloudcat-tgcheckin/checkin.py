@@ -55,8 +55,11 @@ def send_tg_notification(status: str, message: str):
 
 async def check_in():
     """执行频道签到并判断结果的主逻辑"""
-    if not all([TG_API_ID, TG_API_HASH, TG_CHANNEL, TG_NAME]):
-        err_msg = "缺少必要的 TG_API_ID, TG_API_HASH, TG_CHANNEL 或 TG_NAME 配置！请检查配置"
+    # 检查必须变量
+    required_vars = {'TG_API_ID': TG_API_ID, 'TG_API_HASH': TG_API_HASH,}
+    missing_vars = [name for name, val in required_vars.items() if not val]
+    if missing_vars:
+        err_msg = f"核心登录失败：缺少必要的配置变量: {', '.join(missing_vars)}！请检查 GitHub Secrets 设置"
         log('red', 'error', err_msg)
         send_tg_notification("失败", err_msg)
         return
@@ -109,9 +112,9 @@ async def check_in():
         err_msg = f"连接或执行过程中出现严重错误: {type(e).__name__} - {str(e)}"
         log('red', 'error', err_msg)
         send_tg_notification("失败", err_msg)
-        log('yellow', 'warning', "请检查 API 配置、CHANNEL 名称是否正确，或尝试删除旧的 session 文件重新登录。")
+        log('yellow', 'warning', "请检查 API 配置、CHANNEL 名称是否正确，或尝试删除旧的 session 文件重新登录")
 
 if __name__ == '__main__':
     log('cyan', 'arrow', "开始执行频道签到任务...")
     asyncio.run(check_in())
-    log('green', 'check', "任务结束。")
+    log('green', 'check', "任务结束")
