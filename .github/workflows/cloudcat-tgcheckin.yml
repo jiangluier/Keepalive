@@ -6,7 +6,7 @@ on:
     - cron: '0 0 * * *' # cron 格式: 分 时 日 月 周
 
 jobs:
-  sign_in_job:
+  tg_checkin:
     runs-on: ubuntu-latest
     
     env:
