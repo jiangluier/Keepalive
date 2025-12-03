@@ -170,7 +170,7 @@ async def check_in():
         sys.exit(1)
 
     # === 最终通知 ===
-    log('cyan', 'arrow', f"最终结果 - 状态: {status}, 今日积分: {gained_points}, 总积分: {total_points}"
+    log('cyan', 'arrow', f"最终结果 - 状态: {status}, 今日积分: {gained_points}, 总积分: {total_points}")
     if status == "失败":
         final_msg = "签到失败或无法确认, 请查看日志获取详细错误"
         log('red', 'error', final_msg)
