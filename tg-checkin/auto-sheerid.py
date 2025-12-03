@@ -14,11 +14,13 @@ if sys.platform == 'win32':
 # ================= 配置区域 =================
 TG_API_ID = os.getenv('TG_API_ID')
 TG_API_HASH = os.getenv('TG_API_HASH')
-TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')                       # 你的通知机器人 Token
-TG_CHAT_ID = os.getenv('TG_CHAT_ID')                           # 你的个人 Chat ID (接收通知用)
-TARGET_BOT_USERNAME = '@auto_sheerid_bot'                      # 签到目标机器人用户名
-TARGET_BOT_ID = 7983923821                                     # 签到目标机器人 ID
-CHECK_WAIT_TIME = 5                                            # 等待机器人回复的时间（秒）
+TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')      # 你的通知机器人 Token
+TG_CHAT_ID = os.getenv('TG_CHAT_ID')          # 你的个人 Chat ID (接收通知用)
+TARGET_BOT_USERNAME = '@auto_sheerid_bot'     # 签到目标机器人用户名
+TARGET_BOT_ID = 7983923821                    # 签到目标机器人 ID
+CHECK_WAIT_TIME = 5                           # 等待机器人回复的时间（秒）
+DEFAULT_GAINED_POINTS = "已签"                 # 获得积分的默认值
+DEFAULT_TOTAL_POINTS = "未知"                  # 总积分的默认值
 # ============================================
 
 # 定义颜色和符号 (用于日志美化)
@@ -63,11 +65,10 @@ def send_tg_notification(status: str, gained: str, total: str):
 # 解析积分信息
 def parse_points(message_text: str) -> Tuple[str, str]:
     """
-    从消息文本中解析 '获得积分' 和 '当前积分'。
-    如果未找到，返回默认值。
+    从消息文本中解析 '获得积分' 和 '当前积分'。如果未找到，返回默认值
     """
-    gained_points = "已签"
-    total_points = "未知"
+    gained_points = DEFAULT_GAINED_POINTS
+    total_points = DEFAULT_GAINED_POINTS
     gained_match = re.search(r'获得积分\D*(\d+)', message_text)
     total_match = re.search(r'当前积分\D*(\d+)', message_text)
 
@@ -81,7 +82,7 @@ def parse_points(message_text: str) -> Tuple[str, str]:
 
 # 等待并获取目标机器人最新回复
 async def get_bot_reply(client: TelegramClient, peer_entity: Any, check_limit: int = 10) -> Message | None:
-    log('cyan', 'arrow', f"等待 {CHECK_WAIT_TIME} 秒后读取机器人回复...")
+    log('cyan', 'arrow', f"等待 {CHECK_WAIT_TIME} 秒后读取机器人回复")
     await asyncio.sleep(CHECK_WAIT_TIME)
     
     # 在私聊中，peer_entity 就是机器人本身
@@ -100,10 +101,10 @@ async def check_in():
 
     session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tg_session.session')
     
-    log('cyan', 'arrow', "启动 TG 客户端...")
+    log('cyan', 'arrow', "启动 TG 客户端")
     status = "失败"
-    gained_points = "0分"
-    total_points = "未知分"
+    gained_points = DEFAULT_GAINED_POINTS
+    total_points = DEFAULT_GAINED_POINTS
 
     try:
         async with TelegramClient(session_path, TG_API_ID, TG_API_HASH) as client:
@@ -159,5 +160,5 @@ async def check_in():
     send_tg_notification(status, gained_points, total_points)
 
 if __name__ == '__main__':
-    log('cyan', 'arrow', "=== 开始执行 Auto SheerID 签到任务 ===")
+    log('cyan', 'arrow', "=== 执行 Auto SheerID 签到任务 ===")
     asyncio.run(check_in())
