@@ -79,11 +79,23 @@ def parse_emby_points(message_text: str) -> Tuple[str, str]:
 
     return gained_points, total_points
 
-# 执行 Emby 签到主逻辑
+# 等待并获取目标机器人最新回复
+async def get_bot_reply(client: TelegramClient, peer_entity: Any, check_limit: int = 10) -> Message | None:
+    log('cyan', 'arrow', f"等待 {CHECK_WAIT_TIME} 秒后读取机器人回复")
+    await asyncio.sleep(CHECK_WAIT_TIME)
+    
+    # 在私聊中，peer_entity 就是机器人本身
+    async for msg in client.iter_messages(peer_entity, limit=check_limit):
+        if isinstance(msg, Message) and msg.sender_id == TARGET_BOT_ID:
+            return msg
+    
+    return None
+
+# 执行签到主逻辑
 async def check_in_emby():
-    # 检查核心登录变量 (沿用您的逻辑)
+    # 检查核心登录变量
     if not (TG_API_ID and TG_API_HASH):
-        log('red', 'error', "缺少 TG_API_ID 或 TG_API_HASH，请检查环境变量设置！")
+        log('red', 'error', "缺少 TG_API_ID 或 TG_API_HASH，请检查环境变量设置")
         sys.exit(1)
 
     session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tg_session.session')
