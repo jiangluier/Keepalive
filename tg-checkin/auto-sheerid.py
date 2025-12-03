@@ -40,12 +40,14 @@ def send_tg_notification(status: str, gained: str, total: str):
         log('yellow', 'warning', "未设置 TG_BOT_TOKEN 或 TG_CHAT_ID，跳过通知")
         return
 
+    
+    target_bot_link = TARGET_BOT_USERNAME.replace('@', 't.me/') if TARGET_BOT_USERNAME.startswith('@') else TARGET_BOT_USERNAME # 构造链接
     status_emoji = "✅" if status == "成功" else ("⭐" if status == "今日已签到" else "❌")
     notification_text = (
         f"🤖 *Auto SheerID 签到通知* 🤖\n"
         f"====================\n"
         f"{status_emoji} 状态: {status}\n"
-        f"🎯 目标: {TARGET_BOT_USERNAME}\n"
+        f"🎯 目标: [{TARGET_BOT_USERNAME}]({target_bot_link})\n"
         f"📌 今日获得: {gained}\n"
         f"📊 当前总分: {total}"
     )
