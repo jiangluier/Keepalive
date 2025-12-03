@@ -66,10 +66,10 @@ def parse_points(message_text: str) -> Tuple[str, str]:
     从消息文本中解析 '获得积分' 和 '当前积分'。
     如果未找到，返回默认值。
     """
-    gained_points = "0"
+    gained_points = "已签"
     total_points = "未知"
-    gained_match = re.search(r'获得积分[：:]\s*\+?(\d+)', message_text)
-    total_match = re.search(r'当前积分[：:]\s*(\d+)', message_text)
+    gained_match = re.search(r'获得积分\D*(\d+)', message_text)
+    total_match = re.search(r'当前积分\D*(\d+)', message_text)
 
     if gained_match:
         gained_points = gained_match.group(1)
