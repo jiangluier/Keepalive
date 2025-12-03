@@ -43,11 +43,10 @@ def send_tg_notification(status: str, gained: str, total: str):
     notification_text = (
         f"🎉 *TG 签到任务通知* 🎉\n"
         f"====================\n"
-        f"🔔 状态: {status_emoji} {status}\n"
+        f"{status_emoji} 状态: {status}\n"
         f"📢 频道: [{TG_CHANNEL}]({channel_link})\n"
-        f"======== 详情 ========\n"
-        f"⭐ 今日签到积分: {gained}\n"
-        f"⭐ 您的总积分: {total}"
+        f"📌 今日签到积分: {gained}\n"
+        f"📊 您的总积分: {total}"
     )
     
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
