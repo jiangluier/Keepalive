@@ -19,6 +19,8 @@ TG_CHAT_ID = os.getenv('TG_CHAT_ID')                           # 你的个人或
 TG_CHANNEL = os.getenv('TG_CHANNEL', '@cloudcatgroup')         # 签到目标频道用户名, 格式: @username
 CHANNEL_BOT_ID = int(os.getenv('CHANNEL_BOT_ID', 7694509436))  # 签到目标频道签到机器人的 ID
 CHECK_WAIT_TIME = 8                                            # 等待机器人回复的时间（秒）
+DEFAULT_GAINED_POINTS = "已签"                                  # 获得积分的默认值
+DEFAULT_TOTAL_POINTS = "未知"                                   # 当前总分的默认值
 # ============================================
 
 # 定义颜色和符号 (用于日志美化)
@@ -63,8 +65,8 @@ def send_tg_notification(status: str, gained: str, total: str):
 
 # 解析今日签到积分和总积分
 def parse_points_from_message(message_text: str, is_points_command_reply: bool) -> Tuple[str, str]:
-    gained_points = "0⭐"
-    total_points = "未知⭐"
+    gained_points = DEFAULT_GAINED_POINTS
+    total_points = DEFAULT_TOTAL_POINTS
     
     if is_points_command_reply: # 今日已签到的情况
         gained_match = re.search(r'CheckInAddPoint[:：]\s*(\d+\.?\d*)\s*⭐?', message_text, re.IGNORECASE)
@@ -75,7 +77,6 @@ def parse_points_from_message(message_text: str, is_points_command_reply: bool) 
 
     if gained_match:
         gained_points = f"{gained_match.group(1)}⭐"
-    
     if total_match:
         try:
             total_score = float(total_match.group(1))
@@ -116,8 +117,8 @@ async def check_in():
     
     log('cyan', 'arrow', "启动 TG 并尝试登录")
     status = "失败"
-    gained_points = "0⭐"
-    total_points = "未知⭐"
+    gained_points = DEFAULT_GAINED_POINTS
+    total_points = DEFAULT_GAINED_POINTS
     check_limit = 20  # 消息查找范围
 
     # 签到逻辑：先发送 /checkin，成功则直接获取积分；若为“已签到”则发送 /points 获取积分
