@@ -17,8 +17,8 @@ TG_API_HASH = os.getenv('TG_API_HASH')
 TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')                       # 你的通知机器人 Token
 TG_CHAT_ID = os.getenv('TG_CHAT_ID')                           # 你的个人或群组 Chat ID
 TG_CHANNEL = os.getenv('TG_CHANNEL', '@cloudcatgroup')         # 签到目标频道用户名, 格式: @username
-CHANNEL_BOT_ID = os.getenv('CHANNEL_BOT_ID', '7694509436')     # 签到目标频道签到机器人的 ID
-CHECK_WAIT_TIME = 8                                           # 等待机器人回复的时间（秒）
+CHANNEL_BOT_ID = int(os.getenv('CHANNEL_BOT_ID', 7694509436))  # 签到目标频道签到机器人的 ID
+CHECK_WAIT_TIME = 8                                            # 等待机器人回复的时间（秒）
 # ============================================
 
 # 定义颜色和符号 (用于日志美化)
@@ -119,7 +119,7 @@ async def check_in():
     status = "失败"
     gained_points = "0⭐"
     total_points = "未知⭐"
-    check_limit = 30  # 消息查找范围
+    check_limit = 20  # 消息查找范围
 
     # 签到逻辑：先发送 /checkin，成功则直接获取积分；若为“已签到”则发送 /points 获取积分
     try:
