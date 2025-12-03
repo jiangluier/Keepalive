@@ -102,15 +102,9 @@ async def get_bot_reply(client: TelegramClient, channel_entity: Any, check_limit
     
     async for msg in client.iter_messages(channel_entity, limit=check_limit):
         message_count += 1
-        if isinstance(msg, Message):
-            # 显示消息详情用于调试
-            sender_info = f"发送者 ID: {msg.sender_id}"
-            text_preview = (msg.text[:50] + '...') if msg.text and len(msg.text) > 50 else (msg.text or '[无文本]')
-            log('cyan', 'arrow', f"消息 #{message_count}: {sender_info} | 内容: {text_preview}")
-            
-            if msg.sender_id == CHANNEL_BOT_ID:
-                log('green', 'check', f"找到目标机器人 (ID: {CHANNEL_BOT_ID}) 的回复")
-                return msg
+        if isinstance(msg, Message) and msg.sender_id == CHANNEL_BOT_ID:
+            log('green', 'check', f"找到目标机器人 (ID: {CHANNEL_BOT_ID}) 的回复")
+            return msg
     
     log('yellow', 'warning', f"在最近 {message_count} 条消息中未找到目标机器人 (ID: {CHANNEL_BOT_ID}) 的回复")
     return None
@@ -158,8 +152,8 @@ async def check_in():
                     log('green', 'check', "判断为：签到成功")
                     gained_points, total_points = parse_points_from_message(reply_text, False)
                 
-                # 检查是否已经签到过了
-                elif '今天已签到过了' in reply_text or '今天已签过到了' in reply_text or '已签到' in reply_text or 'already checked in' in reply_text:
+                # 检查是否已经签到过了（匹配实际机器人回复）
+                elif '您今天已经签到过了' in reply_text or '今天已经签到' in reply_text or '今日已签到' in reply_text:
                     status = "今日已签到"
                     log('yellow', 'warning', "判断为：今日已签到，发送 /points 获取积分详情")
                     
