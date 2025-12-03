@@ -68,7 +68,7 @@ def parse_points(message_text: str) -> Tuple[str, str]:
     从消息文本中解析 '获得积分' 和 '当前积分'。如果未找到，返回默认值
     """
     gained_points = DEFAULT_GAINED_POINTS
-    total_points = DEFAULT_GAINED_POINTS
+    total_points = DEFAULT_TOTAL_POINTS
     gained_match = re.search(r'获得积分\D*(\d+)', message_text)
     total_match = re.search(r'当前积分\D*(\d+)', message_text)
 
@@ -104,7 +104,7 @@ async def check_in():
     log('cyan', 'arrow', "启动 TG 客户端")
     status = "失败"
     gained_points = DEFAULT_GAINED_POINTS
-    total_points = DEFAULT_GAINED_POINTS
+    total_points = DEFAULT_TOTAL_POINTS
 
     try:
         async with TelegramClient(session_path, TG_API_ID, TG_API_HASH) as client:
@@ -134,11 +134,8 @@ async def check_in():
                 elif '已经签到' in reply_text or '已签到' in reply_text:
                     status = "今日已签到"
                     log('yellow', 'warning', "判断为：今日已签到，尝试查询余额")
-                    
-                    # 发送 /balance 查询积分
                     await client.send_message(bot_entity, '/balance')
                     balance_reply = await get_bot_reply(client, bot_entity)
-                    
                     if balance_reply and balance_reply.text:
                         log('green', 'check', f"收到余额回复:\n{balance_reply.text}")
                         _, total_points = parse_points(balance_reply.text)
