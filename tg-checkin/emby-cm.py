@@ -19,8 +19,8 @@ TG_CHAT_ID = os.getenv('TG_CHAT_ID')          # 你的个人 Chat ID (接收通�
 TARGET_BOT_USERNAME = '@EmbyPublicBot'        # 签到目标机器人用户名
 TARGET_BOT_ID = 1429576125                    # 签到目标机器人 ID
 CHECK_WAIT_TIME = 5                           # 等待机器人回复的时间（秒）
-DEFAULT_GAINED_POINTS = "已签"                 # 获得积分的默认值
-DEFAULT_TOTAL_POINTS = "未知"                  # 总积分的默认值
+DEFAULT_GAINED_POINTS = "已签"                # 获得积分的默认值
+DEFAULT_TOTAL_POINTS = "未知"                 # 总积分的默认值
 # ============================================
 
 # 定义颜色和符号 (用于日志美化)
@@ -39,12 +39,11 @@ def send_tg_notification(status: str, gained: str, total: str):
     if not (TG_BOT_TOKEN and TG_CHAT_ID):
         log('yellow', 'warning', "未设置 TG_BOT_TOKEN 或 TG_CHAT_ID，跳过通知")
         return
-
-    
+        
     target_bot_link = TARGET_BOT_USERNAME.replace('@', 't.me/') if TARGET_BOT_USERNAME.startswith('@') else TARGET_BOT_USERNAME # 构造链接
     status_emoji = "✅" if status == "成功" else ("⭐" if status == "今日已签到" else "❌")
     notification_text = (
-        f"🤖 *Auto SheerID 签到通知* 🤖\n"
+        f"🤖 *Emby 签到任务通知* 🤖\n"
         f"====================\n"
         f"{status_emoji} 状态: {status}\n"
         f"🎯 目标: [{TARGET_BOT_USERNAME}]({target_bot_link})\n"
@@ -69,11 +68,11 @@ def parse_emby_points(message_text: str) -> Tuple[str, str]:
     """从 Emby Bot 消息文本中解析 '获得积分' 和 '当前积分'"""
     gained_points = DEFAULT_GAINED_POINTS
     total_points = DEFAULT_TOTAL_POINTS
-    gained_match = re.search(r'获得了\s*(\d+)\s*积分', message_text)
-    total_match = re.search(r'总分[:：]\s*(\d+)', message_text)
+    gained_match = re.search(r'获得了\s*(\d+)\s*积分', message_text) # 匹配分值前后空格
+    total_match = re.search(r'总分[:：]\s*(\d+)', message_text) # 匹配分值前面的: 和空格
 
     if gained_match:
-        gained_points = f"{gained_match.group(1)}分"   
+        gained_points = f"{gained_match.group(1)}分"    
     if total_match:
         total_points = f"{total_match.group(1)}分"
 
@@ -92,7 +91,7 @@ async def get_bot_reply(client: TelegramClient, peer_entity: Any, check_limit: i
     return None
 
 # 执行签到主逻辑
-async def check_in_emby():
+async def check_in():
     # 检查核心登录变量
     if not (TG_API_ID and TG_API_HASH):
         log('red', 'error', "缺少 TG_API_ID 或 TG_API_HASH，请检查环境变量设置")
@@ -103,7 +102,7 @@ async def check_in_emby():
     status = "失败"
     gained_points = DEFAULT_GAINED_POINTS
     total_points = DEFAULT_TOTAL_POINTS
-    BUTTON_ATTEMPTS = 3  # 按钮索引，从 0 开始
+    BUTTON_ATTEMPTS = 3 # 尝试点击的按钮次数
     
     try:
         async with TelegramClient(session_path, TG_API_ID, TG_API_HASH) as client:
@@ -118,17 +117,11 @@ async def check_in_emby():
 
             log('cyan', 'arrow', "发送 /checkin 签到命令")
             await client.send_message(bot_entity, '/checkin')
-            initial_reply = await get_bot_reply(client, bot_entity, CHECK_WAIT_TIME)
+            initial_reply = await get_bot_reply(client, bot_entity, CHECK_WAIT_TIME) 
             
             if not initial_reply or not initial_reply.text:
-                 log('red', 'error', "未收到 /checkin 后的机器人回复")
-                 # 尝试直接解析回复，因为可能直接回复“已签到”而没有按钮
-                 status = "未知响应"
-                 if initial_reply and ('已签到' in initial_reply.text or '机会已用完' in initial_reply.text):
-                     status = "今日已签到"
-                     gained_points, total_points = parse_emby_points(initial_reply.text)
-                 else:
-                     log('red', 'error', "无法识别机器人的回复内容")
+                log('red', 'error', "未收到 /checkin 后的机器人回复")
+                status = "未知响应"
             
             # 情况 B: 今日已签到 (在有按钮回复前处理)
             elif '已签到' in initial_reply.text or '机会已用完' in initial_reply.text:
@@ -139,16 +132,20 @@ async def check_in_emby():
             # 情况 C: 首次签到，需要点击按钮
             elif initial_reply.buttons:
                 log('yellow', 'warning', "判断为：需要图片验证码，开始尝试点击按钮")
+                
+                # 检查第一行按钮
                 if not initial_reply.buttons[0]:
                     log('red', 'error', "机器人回复中未检测到按钮")
                     return
                 
                 buttons = initial_reply.buttons[0]
+                
                 for i in range(min(len(buttons), BUTTON_ATTEMPTS)):
                     button_label = buttons[i].text
                     log('cyan', 'arrow', f"尝试点击第 {i+1} 个按钮: {button_label}")
-                    click_reply = await initial_reply.click(i)  # 点击按钮并等待回复
-                    action_reply = await get_bot_reply(client, bot_entity, EMBY_CHECK_WAIT_TIME)  # 点击后，最新的回复将是下一条消息
+                    # 点击按钮 (click() 返回一个 Message 对象的 Future，但在 Telethon 1.x 中通常忽略其返回值)
+                    await initial_reply.click(i) 
+                    action_reply = await get_bot_reply(client, bot_entity, CHECK_WAIT_TIME)
                     
                     if action_reply and action_reply.text:
                         reply_text = action_reply.text
@@ -164,7 +161,7 @@ async def check_in_emby():
                         # 错误判断
                         elif '错误' in reply_text:
                             log('yellow', 'warning', f"点击 {button_label} 错误，继续尝试下一个")
-                        
+                            
                         else:
                             status = "未知响应"
                             log('red', 'error', "无法识别点击后的回复内容")
@@ -173,10 +170,10 @@ async def check_in_emby():
                         log('red', 'error', "点击按钮后未收到回复")
                         break # 未收到回复，停止尝试
                 
-                # 检查是否成功
+                # 检查是否成功 (只有在 status 仍为初始值或 '按钮尝试失败' 时才记录失败)
                 if status != "成功" and status != "今日已签到":
                     status = "按钮尝试失败"
-                    log('red', 'error', f"已尝试 {BUTTON_ATTEMPTS} 个按钮，签到失败"
+                    log('red', 'error', f"已尝试 {BUTTON_ATTEMPTS} 个按钮，签到失败")
 
             else:
                 status = "未知响应"
@@ -192,5 +189,6 @@ async def check_in_emby():
 
 # 主执行块
 if __name__ == '__main__':
-    log('cyan', 'arrow', f"=== 执行 {EMBY_BOT_USERNAME} 签到任务 ===")
-    asyncio.run(check_in_emby())
+    log('cyan', 'arrow', f"=== 执行 {TARGET_BOT_USERNAME} 签到任务 ===")
+    asyncio.run(check_in())
+    
