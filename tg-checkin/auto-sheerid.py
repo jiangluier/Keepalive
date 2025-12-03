@@ -73,12 +73,11 @@ def parse_points(message_text: str) -> Tuple[str, str]:
     total_match = re.search(r'当前积分\D*(\d+)', message_text)
 
     if gained_match:
-        gained_points = gained_match.group(1)
-    
+        gained_points = f"{gained_match.group(1)}分"
     if total_match:
-        total_points = total_match.group(1)
+        total_points = f"{total_match.group(1)}分"
 
-    return f"{gained_points}分", f"{total_points}分"
+    return gained_points, total_points
 
 # 等待并获取目标机器人最新回复
 async def get_bot_reply(client: TelegramClient, peer_entity: Any, check_limit: int = 10) -> Message | None:
