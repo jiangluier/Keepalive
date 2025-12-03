@@ -27,8 +27,8 @@ jobs:
     - name: 📦 安装 Python 依赖
       run: |
         python -m pip install --upgrade pip
-        pip install -r cloudcat-tgcheckin/requirements.txt
+        pip install -r tg-checkin/requirements.txt
         
     - name: 🚀 执行 TG 频道签到脚本
-      run: python -u cloudcat-tgcheckin/checkin.py
+      run: python -u tg-checkin/cloudcat.py
       
