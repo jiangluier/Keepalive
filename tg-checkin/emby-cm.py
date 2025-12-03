@@ -100,7 +100,6 @@ async def check_in_emby():
 
     session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tg_session.session')
     
-    log('cyan', 'arrow', f"=== 执行 {EMBY_BOT_USERNAME} 签到任务 ===")
     status = "失败"
     gained_points = DEFAULT_GAINED_POINTS
     total_points = DEFAULT_TOTAL_POINTS
@@ -191,11 +190,7 @@ async def check_in_emby():
     log('cyan', 'arrow', f"执行结束 - 状态: {status}, 获得: {gained_points}, 总分: {total_points}")
     send_tg_notification(status, gained_points, total_points)
 
-# ==============================================================================
-
-# 替换主执行块
+# 主执行块
 if __name__ == '__main__':
-    # 注意：请将配置区域的 TARGET_BOT_USERNAME 和 TARGET_BOT_ID 替换为 Emby 的常量，
-    # 或者将 check_in_emby 函数中的常量替换为 TARGET_BOT_USERNAME/ID，以统一变量名。
-    # 这里为了演示和清晰，使用了新的常量名。
+    log('cyan', 'arrow', f"=== 执行 {EMBY_BOT_USERNAME} 签到任务 ===")
     asyncio.run(check_in_emby())
