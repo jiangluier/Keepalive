@@ -43,7 +43,7 @@ def send_tg_notification(status: str, gained: str, total: str):
     target_bot_link = TARGET_BOT_USERNAME.replace('@', 't.me/') if TARGET_BOT_USERNAME.startswith('@') else TARGET_BOT_USERNAME # 构造链接
     status_emoji = "✅" if status == "成功" else ("⭐" if status == "今日已签到" else "❌")
     notification_text = (
-        f"🤖 *Emby 签到任务通知* 🤖\n"
+        f"🤖 *厂妹 Emby 签到通知* 🤖\n"
         f"====================\n"
         f"{status_emoji} 状态: {status}\n"
         f"🎯 目标: [{TARGET_BOT_USERNAME}]({target_bot_link})\n"
