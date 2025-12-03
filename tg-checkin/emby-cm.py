@@ -117,19 +117,18 @@ async def check_in():
 
             log('cyan', 'arrow', "发送 /checkin 签到命令")
             await client.send_message(bot_entity, '/checkin')
-            initial_reply = await get_bot_reply(client, bot_entity, CHECK_WAIT_TIME) 
-            
+            initial_reply = await get_bot_reply(client, bot_entity, CHECK_WAIT_TIME)    
             if not initial_reply or not initial_reply.text:
                 log('red', 'error', "未收到 /checkin 后的机器人回复")
                 status = "未知响应"
             
-            # 情况 B: 今日已签到 (在有按钮回复前处理)
+            # 情况 A: 今日已签到 (在有按钮回复前处理)
             elif '已签到' in initial_reply.text or '机会已用完' in initial_reply.text:
                 status = "今日已签到"
                 log('yellow', 'warning', "判断为：今日已签到")
                 gained_points, total_points = parse_emby_points(initial_reply.text)
                 
-            # 情况 C: 首次签到，需要点击按钮
+            # 情况 B: 今日首次签到，需要点击按钮
             elif initial_reply.buttons:
                 log('yellow', 'warning', "判断为：需要图片验证码，开始尝试点击按钮")
                 
