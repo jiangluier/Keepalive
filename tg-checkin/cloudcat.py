@@ -43,7 +43,7 @@ def send_tg_notification(status: str, gained: str, total: str):
     channel_link = TG_CHANNEL.replace('@', 't.me/') if TG_CHANNEL.startswith('@') else TG_CHANNEL # 构造频道链接
     status_emoji = "✅" if status == "成功" else ("⭐" if status == "今日已签到" else "❌") # 状态 Emoji
     notification_text = (
-        f"🎉 *TG 签到任务通知* 🎉\n"
+        f"🎉 *Cloud Cat 签到通知* 🎉\n"
         f"====================\n"
         f"{status_emoji} 状态: {status}\n"
         f"📢 频道: [{TG_CHANNEL}]({channel_link})\n"
