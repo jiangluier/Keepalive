@@ -14,13 +14,13 @@ if sys.platform == 'win32':
 # ================= 配置区域 =================
 TG_API_ID = os.getenv('TG_API_ID')
 TG_API_HASH = os.getenv('TG_API_HASH')
-TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')                       # 你的通知机器人 Token
-TG_CHAT_ID = os.getenv('TG_CHAT_ID')                           # 你的个人或群组 Chat ID
-TG_CHANNEL = os.getenv('TG_CHANNEL', '@cloudcatgroup')         # 签到目标频道用户名, 格式: @username
-CHANNEL_BOT_ID = int(os.getenv('CHANNEL_BOT_ID', 7694509436))  # 签到目标频道签到机器人的 ID
-CHECK_WAIT_TIME = 8                                            # 等待机器人回复的时间（秒）
-DEFAULT_GAINED_POINTS = "已签"                                  # 获得积分的默认值
-DEFAULT_TOTAL_POINTS = "未知"                                   # 当前总分的默认值
+TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')    # 你的通知机器人 Token
+TG_CHAT_ID = os.getenv('TG_CHAT_ID')        # 你的个人或群组 Chat ID
+TG_CHANNEL = '@cloudcatgroup'               # 签到目标频道用户名, 格式: @username
+CHANNEL_BOT_ID = 7694509436                 # 签到目标频道签到机器人的 ID
+CHECK_WAIT_TIME = 8                         # 等待机器人回复的时间（秒）
+DEFAULT_GAINED_POINTS = "已签"               # 获得积分的默认值
+DEFAULT_TOTAL_POINTS = "未知"                # 当前总分的默认值
 # ============================================
 
 # 定义颜色和符号 (用于日志美化)
