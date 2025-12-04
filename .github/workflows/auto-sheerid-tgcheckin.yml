@@ -2,8 +2,11 @@ name: Auto SheerID - TG 自动签到
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '10 0 * * *' # cron 格式: 分 时 日 月 周
+  #schedule:
+  #  - cron: '10 0 * * *' # cron 格式: 分 时 日 月 周
+  workflow_run:
+    workflows: [""]
+    types: [completed]
 
 jobs:
   tg_checkin:
