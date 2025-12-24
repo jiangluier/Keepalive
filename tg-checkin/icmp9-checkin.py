@@ -24,9 +24,10 @@ CHECK_WAIT_TIME = 5                           # 等待回复时间
 COLORS = {'red': '\033[91m', 'green': '\033[92m', 'yellow': '\033[93m', 'cyan': '\033[96m', 'reset': '\033[0m'}
 SYMBOLS = {'check': '✅', 'warning': '⚠️', 'arrow': '➜', 'error': '❌', 'info': '📊'}
 
-def log(color: str, symbol: str, message: str):
-    print(f"{COLORS[color]}{symbol} {message}{COLORS['reset']}")
-
+def log(color: str, symbol_key: str, message: str):
+    icon = SYMBOLS.get(symbol_key, symbol_key)
+    print(f"{COLORS[color]}{icon} {message}{COLORS['reset']}")
+    
 def send_tg_notification(data: Dict[str, str]):
     if not (TG_BOT_TOKEN and TG_CHAT_ID):
         log('yellow', 'warning', "未设置通知变量，跳过通知")
@@ -34,12 +35,12 @@ def send_tg_notification(data: Dict[str, str]):
 
     text = (
         f"🤖 *ICMP9 签到报告*\n"
-        f"━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━\n"
         f"👤 账户: {data.get('user', '未知')}\n"
         f"📅 状态: {data.get('status', '未知')}\n"
         f"🎁 今日已获: {data.get('gained', '0 GB')}\n"
         f"🔥 连续签到: {data.get('streak', '未知')}\n"
-        f"━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━\n"
         f"📦 总配额: {data.get('total', '未知')}\n"
         f"📈 已使用: {data.get('used', '未知')}\n"
         f"📉 剩余量: {data.get('remaining', '未知')}\n"
@@ -54,22 +55,18 @@ def send_tg_notification(data: Dict[str, str]):
         log('red', 'error', f"发送通知失败: {e}")
 
 def parse_all_info(text: str, current_data: Dict[str, str]) -> Dict[str, str]:
-    """解析签到回复和账户回复中的所有字段"""
-    # 提取今日获得/配额/连续签到 (针对签到回复)
-    gained = re.search(r'(获得|今日已获)：\+?([\d\.]+ \w+)', text)
-    quota = re.search(r'(配额|当前配额)：([\d\.]+ \w+)', text)
-    streak = re.search(r'连续签到：(\d+ 天)', text)
-    
-    # 提取详细账户信息 (针对账户按钮回复)
-    user = re.search(r'📊 (.*)', text)
-    used = re.search(r'已用：([\d\.]+ \w+)', text)
-    rem = re.search(r'剩余：([\d\.]+ \w+)', text)
-    vms = re.search(r'虚机：(\d+) 台', text)
+    user = re.search(r'📊\s*(.*)', text)
+    gained = re.search(r'(获得|今日已获)[：:]\s*([\d\.]+\s*[GMB]+)', text)
+    streak = re.search(r'连续签到[：:]\s*(\d+\s*天)', text)
+    quota = re.search(r'(配额|当前配额)[：:]\s*([\d\.]+\s*[GMB]+)', text)
+    used = re.search(r'已用[：:]\s*([\d\.]+\s*[GMB]+)', text)
+    rem = re.search(r'剩余[：:]\s*([\d\.]+\s*[GMB]+)', text)
+    vms = re.search(r'虚机[：:]\s*(\d+)\s*台', text)
 
-    if gained: current_data['gained'] = gained.group(2)
-    if quota: current_data['total'] = quota.group(2)
-    if streak: current_data['streak'] = streak.group(1)
     if user: current_data['user'] = user.group(1).strip()
+    if gained: current_data['gained'] = gained.group(2)
+    if streak: current_data['streak'] = streak.group(1)
+    if quota: current_data['total'] = quota.group(2)
     if used: current_data['used'] = used.group(1)
     if rem: current_data['remaining'] = rem.group(1)
     if vms: current_data['vm_count'] = vms.group(1)
@@ -105,39 +102,43 @@ async def main():
         await client.send_message(bot, '/checkin')
         await asyncio.sleep(CHECK_WAIT_TIME)
         
-        # 2. 获取回复并解析
+        # 2. 获取初始回复并解析
         msgs = await client.get_messages(bot, limit=1)
         if not msgs: return
+        reply_msg = msgs[0] # 保存这个消息对象
+        info = parse_all_info(reply_msg.text, info)
         
-        reply_text = msgs[0].text
-        info = parse_all_info(reply_text, info)
-        
-        if "签到成功" in reply_text:
+        if "签到成功" in reply_msg.text:
             info['status'] = "✅ 签到成功"
-        elif "已经签到" in reply_text:
+        elif "已经签到" in reply_msg.text:
             info['status'] = "ℹ️ 今日已签"
         
         # 3. 点击“账户”按钮以获取更详细的数据
-        log('cyan', 'arrow', "点击 [账户] 按钮获取详情...")
+        log('cyan', 'arrow', "点击 [账户] 按钮（更新当前消息）...")
         try:
-            # 查找名为 "账户" 的按钮并点击
-            await msgs[0].click(text='账户')
-            await asyncio.sleep(CHECK_WAIT_TIME)
-            # 获取点击按钮后的新回复
-            acc_msgs = await client.get_messages(bot, limit=1)
-            info = parse_all_info(acc_msgs[0].text, info)
+            await reply_msg.click(text='账户')
+            await asyncio.sleep(CHECK_WAIT_TIME) # 等待编辑完成
+            
+            updated_msgs = await client.get_messages(bot, ids=reply_msg.id)
+            if updated_msgs:
+                log('green', 'check', "成功捕获编辑后的账户信息")
+                info = parse_all_info(updated_msgs.text, info)
         except Exception as e:
-            log('yellow', 'warning', f"点击按钮失败: {e}")
-
+            log('yellow', 'warning', f"点击账户按钮失败: {e}")
+            
         # 4. 点击“虚机”按钮获取虚机详情
         try:
-            await msgs[0].click(text='虚机')
+            log('cyan', 'arrow', "点击 [虚机] 按钮获取详情...")
+            await reply_msg.click(text='虚机')
             await asyncio.sleep(CHECK_WAIT_TIME)
-            vm_msgs = await client.get_messages(bot, limit=1)
-            if "虚拟机列表" in vm_msgs[0].text:
-                info['vm_info'] = vm_msgs[0].text.split('━━━━━━━━━━━━━━')[-1].strip()
-        except:
-            pass
+            
+            updated_msgs = await client.get_messages(bot, ids=reply_msg.id)
+            if updated_msgs and "虚拟机列表" in updated_msgs.text:
+                # 提取虚机列表部分
+                parts = updated_msgs.text.split('━━━━━━━━━━━━━━')
+                info['vm_info'] = parts[-1].strip() if len(parts) > 1 else updated_msgs.text
+        except Exception as e:
+            log('yellow', 'warning', f"点击虚机按钮失败: {e}")
 
         log('green', 'check', f"任务完成: {info['status']}")
         send_tg_notification(info)
