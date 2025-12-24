@@ -5,7 +5,7 @@ on:
   #schedule:
   #  - cron: '10 0 * * *' # cron 格式: 分 时 日 月 周
   workflow_run:
-    workflows: ["Auto SheerID 自动签到"]
+    workflows: ["CloudCat TG 频道自动签到"]
     types: [completed]
 
 jobs:
