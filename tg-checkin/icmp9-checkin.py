@@ -150,8 +150,10 @@ async def main():
             refreshed = await client.get_messages(bot, ids=msg_obj.id)
             if refreshed:
                 log('green', 'check', "虚机列表获取成功")
-                clean_text = re.sub(r'🖥️ 虚拟机列表\s*', '', refreshed.text)
-                clean_text = clean_text.replace('*', '').strip()
+                clean_text = refreshed.text.replace('*', '')
+                if "虚拟机列表" in clean_text:
+                    clean_text = clean_text.split("虚拟机列表")[-1]
+                clean_text = clean_text.strip()
                 info['vm_info'] = clean_text if clean_text else "您当前没有虚拟机"
             else:
                 log('yellow', 'warning', "虚机列表获取失败")
