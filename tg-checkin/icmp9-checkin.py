@@ -3,15 +3,9 @@ import sys
 import asyncio
 import re
 import requests
-import io
 import traceback
 from telethon import TelegramClient
 from typing import Dict, Any
-
-# ================= 运行环境兼容 =================
-# 强制 UTF-8 编码，确保 GitHub Actions 日志中的 Emoji 正常显示
-if sys.stdout.encoding != 'utf-8':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -19,10 +13,10 @@ if sys.platform == 'win32':
 # ================= 配置区域 =================
 TG_API_ID = os.getenv('TG_API_ID')
 TG_API_HASH = os.getenv('TG_API_HASH')
-TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')      # 通知机器人 Token
-TG_CHAT_ID = os.getenv('TG_CHAT_ID')          # 接收通知的个人 ID
+TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')
+TG_CHAT_ID = os.getenv('TG_CHAT_ID')
 TARGET_BOT_USERNAME = '@ICMP9_Bot'
-CHECK_WAIT_TIME = 8                           # 增加等待时间，确保 Bot 响应
+CHECK_WAIT_TIME = 10
 # ============================================
 
 COLORS = {'red': '\033[91m', 'green': '\033[92m', 'yellow': '\033[93m', 'cyan': '\033[96m', 'reset': '\033[0m'}
@@ -50,7 +44,7 @@ def send_tg_notification(data: Dict[str, str]):
         f"📈 已使用: {data.get('used', '未知')}\n"
         f"📉 剩余量: {data.get('remaining', '未知')}\n"
         f"🖥️ 虚机数: {data.get('vm_count', '未知')}\n"
-        f"📝 虚机信息: {data.get('vm_info', '无')}"
+        f"📝 虚机详情: {data.get('vm_info', '无')}"
     )
     
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
@@ -61,18 +55,19 @@ def send_tg_notification(data: Dict[str, str]):
         log('red', 'error', f"通知发送失败: {e}")
 
 def parse_all_info(text: str, current_data: Dict[str, str]) -> Dict[str, str]:
-    """正则解析消息文本"""
-    user_match = re.search(r'📊\s*([^━━━━━━━━\n\r]+)', text)
-    if user_match: current_data['user'] = user_match.group(1).strip()
+    user_match = re.search(r'📊\s*([^\n\r]+)', text)
+    if user_match:
+        name = user_match.group(1).split('━━')[0].strip()
+        current_data['user'] = name
+
+    gained = re.search(r'今日已获[：:\s]+([\d\.]+\s*[GMB]+)', text)
+    if gained: current_data['gained'] = gained.group(1)
     
-    gained = re.search(r'(获得|今日已获)[：:\s]+(\+?[\d\.]+\s*[GMB]+)', text)
-    if gained: current_data['gained'] = gained.group(2)
+    streak = re.search(r'连续签到[：:\s]+(\d+)', text)
+    if streak: current_data['streak'] = f"{streak.group(1)} 天"
     
-    streak = re.search(r'连续签到[：:\s]+(\d+\s*天)', text)
-    if streak: current_data['streak'] = streak.group(1)
-    
-    quota = re.search(r'(配额|总配额|当前配额)[：:\s]+([\d\.]+\s*[GMB]+)', text)
-    if quota: current_data['total'] = quota.group(2)
+    quota = re.search(r'配额[：:\s]+([\d\.]+\s*[GMB]+)', text)
+    if quota: current_data['total'] = quota.group(1)
     
     used = re.search(r'已用[：:\s]+([\d\.]+\s*[GMB]+)', text)
     if used: current_data['used'] = used.group(1)
@@ -86,97 +81,83 @@ def parse_all_info(text: str, current_data: Dict[str, str]) -> Dict[str, str]:
     return current_data
 
 async def safe_click(msg, button_text):
-    """多策略点击按钮"""
     log('cyan', 'arrow', f"尝试点击按钮: [{button_text}]")
-    if not msg.buttons:
-        log('red', 'error', "该消息没有任何按钮")
+    if not msg or not msg.buttons:
+        log('red', 'error', "消息中没有按钮")
         return False
     
-    # 策略1: 文本直接匹配
     try:
         await msg.click(text=button_text)
         log('green', 'check', f"已通过文本匹配发送点击: {button_text}")
         return True
     except:
-        pass
-    
-    # 策略2: 模糊遍历匹配
-    for row in msg.buttons:
-        for button in row:
-            if button_text in button.button.text:
-                await button.click()
-                log('green', 'check', f"已通过模糊匹配发送点击: {button.button.text}")
-                return True
-    
-    log('red', 'error', f"未找到名为 [{button_text}] 的按钮")
+        for row in msg.buttons:
+            for button in row:
+                if button_text in button.button.text:
+                    await button.click()
+                    log('green', 'check', f"已通过模糊匹配发送点击: {button.button.text}")
+                    return True
     return False
 
 async def main():
     if not (TG_API_ID and TG_API_HASH):
-        log('red', 'error', "环境变量缺失: TG_API_ID 或 TG_API_HASH"); return
+        log('red', 'error', "环境变量缺失"); return
 
-    session_name = 'tg_session'
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    session_path = os.path.join(script_dir, f"{session_name}.session")
-    
-    if not os.path.exists(session_path):
-        log('red', 'error', f"未找到 Session 文件: {session_path}"); return
-    
+    session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tg_session")
     info = {'status': '失败', 'gained': '0 GB', 'vm_info': '暂无数据'}
-    client = TelegramClient(os.path.join(script_dir, session_name), TG_API_ID, TG_API_HASH)
+    client = TelegramClient(session_path, TG_API_ID, TG_API_HASH)
 
     try:
         await client.connect()
         if not await client.is_user_authorized():
-            log('red', 'error', "Session 已失效，请在本地重新登录生成"); return
+            log('red', 'error', "Session 已失效"); return
         
-        log('green', 'check', "TG 登录成功，正在获取机器人实体...")
+        log('green', 'check', "TG 登录成功")
         bot = await client.get_entity(TARGET_BOT_USERNAME)
         
-        # --- 步骤1: 签到 ---
-        log('cyan', 'arrow', "发送签到命令 /checkin")
+        # 1. 签到
         await client.send_message(bot, '/checkin')
-        await asyncio.sleep(CHECK_WAIT_TIME)
+        await asyncio.sleep(5)
         
         msgs = await client.get_messages(bot, limit=1)
-        if not msgs:
-            log('red', 'error', "未收到初始回复"); return
-        
+        if not msgs: return
         msg_obj = msgs[0]
-        log('cyan', 'arrow', f"初始消息预览: {msg_obj.text.replace(chr(10), ' ')[:50]}...")
         
         info = parse_all_info(msg_obj.text, info)
         info['status'] = "✅ 签到成功" if "成功" in msg_obj.text else "ℹ️ 今日已签"
 
-        # --- 步骤2: 账户详情 ---
-        log('cyan', 'arrow', "正在处理账户详情...")
+        # 2. 账户详情
+        log('cyan', 'arrow', "正在请求账户详情...")
         if await safe_click(msg_obj, '账户'):
             await asyncio.sleep(CHECK_WAIT_TIME)
-            # 强制通过 ID 获取最新编辑的内容
             refreshed = await client.get_messages(bot, ids=msg_obj.id)
-            if refreshed:
-                log('cyan', 'arrow', f"账户刷新后预览: {refreshed.text.replace(chr(10), ' ')[:50]}...")
-                info = parse_all_info(refreshed.text, info)
-                msg_obj = refreshed # 更新消息对象用于下一步
-        
-        # --- 步骤3: 虚机详情 ---
-        log('cyan', 'arrow', "正在处理虚机详情...")
+            # 如果刷新后还是旧内容，多等一下再拉取一次
+            if "今日已经签到" in refreshed.text:
+                await asyncio.sleep(5)
+                refreshed = await client.get_messages(bot, ids=msg_obj.id)
+            
+            log('cyan', 'arrow', f"账户内容快照: {refreshed.text[:30].replace(chr(10), ' ')}...")
+            info = parse_all_info(refreshed.text, info)
+            msg_obj = refreshed
+
+        # 3. 虚机详情
+        log('cyan', 'arrow', "正在请求虚机详情...")
         if await safe_click(msg_obj, '虚机'):
             await asyncio.sleep(CHECK_WAIT_TIME)
             refreshed = await client.get_messages(bot, ids=msg_obj.id)
-            if refreshed and "虚拟机列表" in refreshed.text:
-                log('green', 'check', "已捕获虚机列表内容")
+            # 容错：只要有“虚拟机”或“当前没有”字样就解析
+            if refreshed and ("虚拟机" in refreshed.text or "没有虚拟机" in refreshed.text):
+                log('green', 'check', "虚机内容抓取成功")
                 parts = refreshed.text.split('━━━━━━━━━━━━━━')
                 info['vm_info'] = parts[-1].strip() if len(parts) > 1 else refreshed.text
             else:
-                log('yellow', 'warning', "未能获取到虚机列表文本")
+                log('yellow', 'warning', "未检测到虚机列表文本")
 
-        # --- 步骤4: 总结与通知 ---
-        log('green', 'check', f"签到任务结束。账户: {info.get('user')}, 状态: {info.get('status')}")
+        log('green', 'check', f"任务结束, 账户: {info.get('user')}")
         send_tg_notification(info)
         
     except Exception as e:
-        log('red', 'error', f"程序运行奔溃: {str(e)}")
+        log('red', 'error', f"程序崩溃: {str(e)}")
         traceback.print_exc()
     finally:
         await client.disconnect()
