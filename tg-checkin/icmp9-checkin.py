@@ -80,11 +80,24 @@ async def main():
     if not (TG_API_ID and TG_API_HASH):
         log('red', 'error', "环境变量缺失"); return
 
-    session_path = os.path.join(os.path.dirname(__file__), 'icmp9.session')
+    session_name = 'tg_session'
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    session_path = os.path.join(script_dir, f"{session_name}.session")
+    session_path_no_ext = os.path.join(script_dir, session_name)
+    if not os.path.exists(session_path):
+        log('red', 'error', f"错误: 未找到 {session_path} 文件！")
+        return # 提前退出
+    
     info = {'status': '失败', 'gained': '0 GB', 'vm_info': '暂无数据'}
+    client = TelegramClient(session_path_no_ext, TG_API_ID, TG_API_HASH)
 
-    async with TelegramClient(session_path, TG_API_ID, TG_API_HASH) as client:
-        log('cyan', 'arrow', "正在启动...")
+    try:
+        await client.connect()
+        if not await client.is_user_authorized():
+            log('red', 'error', "tg-session 已失效或未登录，请在重新生成后上传")
+            return
+        log('green', 'check', "tg-session 验证成功, 正在执行任务...")
+        
         bot = await client.get_entity(TARGET_BOT_USERNAME)
         
         # 1. 发送签到命令
@@ -128,6 +141,11 @@ async def main():
 
         log('green', 'check', f"任务完成: {info['status']}")
         send_tg_notification(info)
+    
+    except Exception as e:
+        log('red', 'error', f"运行中出错: {e}")
+    finally:
+        await client.disconnect()
 
 if __name__ == '__main__':
     asyncio.run(main())
