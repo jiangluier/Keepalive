@@ -26,11 +26,12 @@ CHECK_WAIT_TIME = 8                           # 增加等待时间，确保 Bot 
 # ============================================
 
 COLORS = {'red': '\033[91m', 'green': '\033[92m', 'yellow': '\033[93m', 'cyan': '\033[96m', 'reset': '\033[0m'}
-SYMBOLS = {'check': '✅', 'warning': '⚠️', 'arrow': '➜', 'error': '❌', 'info': '📊'}
+SYMBOLS = {'check': '✅', 'warning': '⚠️', 'arrow': '➡️', 'error': '❌'}
 
-def log(color: str, symbol_key: str, message: str):
+def log(color_key: str, symbol_key: str, message: str):
+    color = COLORS.get(color_key, COLORS['reset'])
     icon = SYMBOLS.get(symbol_key, symbol_key)
-    print(f"{COLORS[color]}{icon} {message}{COLORS['reset']}")
+    print(f"{color}{icon} {message}{COLORS['reset']}")
 
 def send_tg_notification(data: Dict[str, str]):
     if not (TG_BOT_TOKEN and TG_CHAT_ID):
@@ -142,7 +143,7 @@ async def main():
             log('red', 'error', "未收到初始回复"); return
         
         msg_obj = msgs[0]
-        log('info', 'info', f"初始消息预览: {msg_obj.text.replace(chr(10), ' ')[:50]}...")
+        log('cyan', 'arrow', f"初始消息预览: {msg_obj.text.replace(chr(10), ' ')[:50]}...")
         
         info = parse_all_info(msg_obj.text, info)
         info['status'] = "✅ 签到成功" if "成功" in msg_obj.text else "ℹ️ 今日已签"
@@ -154,7 +155,7 @@ async def main():
             # 强制通过 ID 获取最新编辑的内容
             refreshed = await client.get_messages(bot, ids=msg_obj.id)
             if refreshed:
-                log('info', 'info', f"账户刷新后预览: {refreshed.text.replace(chr(10), ' ')[:50]}...")
+                log('cyan', 'arrow', f"账户刷新后预览: {refreshed.text.replace(chr(10), ' ')[:50]}...")
                 info = parse_all_info(refreshed.text, info)
                 msg_obj = refreshed # 更新消息对象用于下一步
         
@@ -181,5 +182,5 @@ async def main():
         await client.disconnect()
 
 if __name__ == '__main__':
-    log('cyan', 'info', "=== 开始执行 ICMP9 签到自动化脚本 ===")
+    log('cyan', 'arrow', "=== 开始执行 ICMP9 自动签到脚本 ===")
     asyncio.run(main())
