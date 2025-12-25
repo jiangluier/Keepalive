@@ -58,12 +58,11 @@ def parse_all_info(text: str, current_data: Dict[str, str], parse_user: bool = F
     if parse_user:
         user_match = re.search(r'📊\s*([^\n\r]+)', text)
         if user_match:
-            # 这里的 split('━━')[0] 处理得很棒，精准抓取用户名
             name = user_match.group(1).split('━━')[0].strip().replace('*', '')
             current_data['user'] = name
             log('green', 'check', f"解析到用户名: {name}")
 
-    gained = re.search(r'今日已获[：:\s]+([\d\.]+\s*[GMB]+)', text)
+    gained = re.search(r'(?:今日|已).*?(?:获得|获)[：:\s]+([\d\.]+\s*[GMB]+)', text)
     if gained: current_data['gained'] = gained.group(1)
     
     streak = re.search(r'连续签到[：:\s]+(\d+)', text)
