@@ -194,20 +194,30 @@ async def main():
             else:
                 log('yellow', 'warning', "虚拟机列表获取失败")
 
-        log('green', 'check', "任务执行完毕!")
-
     except Exception as e:
-        log('red', 'error', f"严重错误: {str(e)}")
         traceback.print_exc()
-        info['status'] = f"❌ 运行失败: {type(e).__name__}"
+        err_msg = f"严重错误: {type(e).__name__} - {str(e)}"
+        log('red', 'error', err_msg)
+        info['status'] = "错误"
     finally:
         if client.is_connected():
             await client.disconnect()
             log('cyan', 'arrow', "连接已断开")
+        # === 最终通知 ===
         send_tg_notification(info)
+        log('green', 'check', "任务执行完毕，结果统计：")
+        log('cyan', 'arrow', f"最终状态: {info['status']}")
+        log('cyan', 'arrow', f"连续签到: {info['streak']}")
+        log('cyan', 'arrow', f"今日获得: {info['gained']}")
+        log('cyan', 'arrow', f"当前总配额: {info['total']}")
+        log('cyan', 'arrow', f"已用配额: {info['used']}")
+        log('cyan', 'arrow', f"剩余配额: {info['remaining']}")
+        log('cyan', 'arrow', f"虚拟机数量: {info['vm_count']}")
+        log('cyan', 'arrow', f"虚拟机详情: {info['vm_info']}")
+
         if not any(k in info['status'] for k in ["成功", "已签"]):
             sys.exit(1)
 
 if __name__ == '__main__':
-    log('cyan', 'arrow', "=== 开始执行 ICMP9 自动签到脚本 ===")
+    log('cyan', 'arrow', "=== 执行 ICMP9 签到任务 ===")
     asyncio.run(main())
