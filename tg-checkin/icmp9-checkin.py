@@ -161,14 +161,14 @@ async def main():
             await asyncio.sleep(CHECK_WAIT_TIME)
             refreshed = await client.get_messages(bot, ids=msg_obj.id)
             if refreshed:
-                log('green', 'check', "虚机列表获取成功")
                 clean_text = refreshed.text.replace('*', '')
                 if "虚拟机列表" in clean_text:
                     clean_text = clean_text.split("虚拟机列表")[-1]
                 clean_text = clean_text.strip()
                 info['vm_info'] = clean_text if clean_text else "您当前没有虚拟机"
+                log('green', 'check', f"虚拟机列表: {info['vm_info']}")
             else:
-                log('yellow', 'warning', "虚机列表获取失败")
+                log('yellow', 'warning', "虚拟机列表获取失败")
 
         log('green', 'check', "任务执行完毕!")
         send_tg_notification(info)
