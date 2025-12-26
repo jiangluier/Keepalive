@@ -22,7 +22,7 @@ TG_CHAT_ID = os.getenv('TG_CHAT_ID')          # 你的个人 Chat ID (接收通�
 TARGET_BOT_USERNAME = '@auto_sheerid_bot'     # 签到目标机器人用户名
 TARGET_BOT_ID = 7983923821                    # 签到目标机器人 ID
 CHECK_WAIT_TIME = 5                           # 等待机器人回复的时间（秒）
-DEFAULT_GAINED_POINTS = "已签"                 # 获得积分的默认值
+DEFAULT_GAINED_POINTS = "未知"                 # 获得积分的默认值
 DEFAULT_TOTAL_POINTS = "未知"                  # 总积分的默认值
 # ============================================
 
