@@ -62,10 +62,11 @@ def parse_all_info(text: str, current_data: Dict[str, str], parse_user: bool = F
             current_data['user'] = name
             log('green', 'check', f"解析到用户名: {name}")
 
-    gained = re.search(r'(\d+(?:\.\d+)?)\s*(GB|MB|KB|B)', text, re.I)
-    if gained:
-        current_data['gained'] = f"{gained.group(1)} {gained.group(2).upper()}"
-        log('green', 'check', f"解析到今日获得的流量: {current_data['gained']}")
+    if parse_gained:
+        gained = re.search(r'(\d+(?:\.\d+)?)\s*(GB|MB|KB|B)', text, re.I)
+        if gained:
+            current_data['gained'] = f"{gained.group(1)} {gained.group(2).upper()}"
+            log('green', 'check', f"解析到今日获得的流量: {current_data['gained']}")
     
     streak = re.search(r'连续签到[：:\s]+(\d+)', text)
     if streak:
@@ -138,7 +139,7 @@ async def main():
             return
         msg_obj = msgs[0]
         
-        info = parse_all_info(msg_obj.text, info, parse_user=False)
+        info = parse_all_info(msg_obj.text, info, parse_user=False, parse_gained=True)
         info['status'] = "✅ 签到成功" if "成功" in msg_obj.text else "ℹ️ 今日已签"
 
         # 2. 账户详情
@@ -148,7 +149,7 @@ async def main():
             await asyncio.sleep(CHECK_WAIT_TIME)
             refreshed = await client.get_messages(bot, ids=msg_obj.id)
             if refreshed:
-                info = parse_all_info(refreshed.text, info, parse_user=True)
+                info = parse_all_info(refreshed.text, info, parse_user=True, parse_gained=False)
                 msg_obj = refreshed
             else:
                 log('yellow', 'warning', "账户信息获取失败")
