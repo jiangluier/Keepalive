@@ -20,7 +20,6 @@ TG_SESSION_STR = os.getenv('TG_SESSION_STR')  # 你的 TG Session 字符串
 TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')      # 你的通知机器人 Token
 TG_CHAT_ID = os.getenv('TG_CHAT_ID')          # 你的个人 Chat ID (接收通知用)
 TARGET_BOT_USERNAME = '@auto_sheerid_bot'     # 签到目标机器人用户名
-TARGET_BOT_ID = 7983923821                    # 签到目标机器人 ID
 CHECK_WAIT_TIME = 5                           # 等待机器人回复的时间（秒）
 DEFAULT_GAINED_POINTS = "未知"                 # 获得积分的默认值
 DEFAULT_TOTAL_POINTS = "未知"                  # 总积分的默认值
@@ -88,15 +87,14 @@ def parse_points(message_text: str) -> Tuple[str, str]:
 
 
 # 等待并获取目标机器人最新回复
-async def get_bot_reply(client: TelegramClient, peer_entity: Any, check_limit: int = 10) -> Message | None:
+async def get_bot_reply(client: TelegramClient, bot_entity: Any, check_limit: int = 5) -> Message | None:
     log('cyan', 'arrow', f"等待 {CHECK_WAIT_TIME} 秒后读取机器人回复")
     await asyncio.sleep(CHECK_WAIT_TIME)
 
-    # 在私聊中，peer_entity 就是机器人本身
-    async for msg in client.iter_messages(peer_entity, limit=check_limit):
-        if isinstance(msg, Message) and msg.sender_id == TARGET_BOT_ID:
+    target_id = bot_entity.id # 获取签到机器人的ID
+    async for msg in client.iter_messages(bot_entity, limit=check_limit):
+        if isinstance(msg, Message) and msg.sender_id == target_id and not msg.out:
             return msg
-
     return None
 
 
@@ -137,6 +135,7 @@ async def check_in():
 
         log('cyan', 'arrow', "发送 /qd 签到命令")
         await client.send_message(bot_entity, '/qd')
+        
         reply = await get_bot_reply(client, bot_entity)
         if reply and reply.text:
             reply_text = reply.text
