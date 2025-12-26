@@ -32,15 +32,13 @@ COLORS: Dict[str, str] = {
 }
 SYMBOLS: Dict[str, str] = {'check': '✓', 'warning': '⚠', 'arrow': '➜', 'error': '✗'}
 
+
 # 日志函数
-
-
 def log(color: str, symbol: str, message: str):
     print(f"{COLORS[color]}{SYMBOLS[symbol]} {message}{COLORS['reset']}")
 
+
 # 发送 Telegram 消息通知模板
-
-
 def send_tg_notification(status: str, gained: str, total: str):
     if not (TG_BOT_TOKEN and TG_CHAT_ID):
         log('yellow', 'warning', "未设置 TG_BOT_TOKEN 或 TG_CHAT_ID，跳过通知")
@@ -95,9 +93,8 @@ def parse_points_from_message(message_text: str, is_points_command_reply: bool) 
 
     return gained_points, total_points
 
+
 # 等待并获取目标机器人最新回复
-
-
 async def get_bot_reply(client: TelegramClient, channel_entity: Any, check_limit: int) -> Message | None:
     log('cyan', 'arrow', f"等待 {CHECK_WAIT_TIME} 秒后开始查找机器人回复...")
     await asyncio.sleep(CHECK_WAIT_TIME)
