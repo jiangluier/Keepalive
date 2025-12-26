@@ -186,5 +186,5 @@ async def check_in():
             sys.exit(1)
 
 if __name__ == '__main__':
-    log('cyan', 'arrow', "=== 执行 Auto SheerID 签到任务 ===")
+    log('cyan', 'arrow', "=== 执行 SheerID 签到任务 ===")
     asyncio.run(check_in())
