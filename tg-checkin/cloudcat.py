@@ -96,19 +96,19 @@ def parse_points_from_message(message_text: str, is_points_command_reply: bool) 
 
 
 # 等待并获取目标机器人最新回复
-async def get_bot_reply(client: TelegramClient, channel_entity: Any, check_limit: int) -> Message | None:
+async def get_bot_reply(client: TelegramClient, channel_entity: Any, check_limit: int, min_id: int = 0) -> Message | None:
     log('cyan', 'arrow', f"等待 {CHECK_WAIT_TIME} 秒后开始查找机器人回复...")
     await asyncio.sleep(CHECK_WAIT_TIME)
     log('cyan', 'arrow', f"开始查找最近 {check_limit} 条消息...")
     message_count = 0
 
     async for msg in client.iter_messages(channel_entity, limit=check_limit):
-        message_count += 1
         if isinstance(msg, Message) and msg.sender_id == CHANNEL_BOT_ID:
-            log('green', 'check', f"找到目标机器人 (ID: {CHANNEL_BOT_ID}) 的回复")
-            return msg
-
-    log('yellow', 'warning', f"在最近 {message_count} 条消息中未找到目标机器人 (ID: {CHANNEL_BOT_ID}) 的回复")
+            if msg.id > min_id:
+                log('green', 'check', f"找到目标机器人新回复 (ID: {msg.id})")
+                return msg
+    
+    log('yellow', 'warning', "未找到目标机器人的新回复")
     return None
 
 
@@ -146,8 +146,9 @@ async def check_in():
 
         # 先发送 /checkin 直接签到
         log('cyan', 'arrow', "发送 /checkin 命令进行签到")
-        await client.send_message(channel_entity, '/checkin')
-        checkin_reply = await get_bot_reply(client, channel_entity, check_limit)
+        sent_msg = await client.send_message(channel_entity, '/checkin')
+        checkin_reply = await get_bot_reply(client, channel_entity, check_limit, min_id=sent_msg.id)
+
         if checkin_reply and checkin_reply.text:
             reply_text = checkin_reply.text
             log('green', 'check', f"收到 /checkin 回复，内容:\n{reply_text}")
@@ -162,9 +163,9 @@ async def check_in():
             elif any(keyword in reply_text for keyword in ['已经签到过了', '今天已经签到', '今日已签到']):
                 status = "今日已签到"
                 log('yellow', 'warning', "判断为：今日已签到，发送 /points 获取积分详情")
-                await client.send_message(channel_entity, '/points')
-                points_reply = await get_bot_reply(client, channel_entity, check_limit)
-
+                sent_points_msg = await client.send_message(channel_entity, '/points')
+                points_reply = await get_bot_reply(client, channel_entity, check_limit, min_id=sent_points_msg.id)
+           
                 if points_reply and points_reply.text:
                     points_text = points_reply.text
                     log('green', 'check', f"收到 /points 回复，内容:\n{points_text}")
