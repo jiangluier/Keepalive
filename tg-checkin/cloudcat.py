@@ -132,7 +132,7 @@ async def check_in():
     status = "失败"
     gained_points = DEFAULT_GAINED_POINTS
     total_points = DEFAULT_TOTAL_POINTS
-    check_limit = 20  # 消息查找范围
+    check_limit = 30  # 消息查找范围
 
     # 签到逻辑：先发送 /checkin，成功则直接获取积分；若为“已签到”则发送 /points 获取积分
     try:
