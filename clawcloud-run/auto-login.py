@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 CLAW_CLOUD_URL = "https://eu-central-1.run.claw.cloud"
 SIGNIN_URL = f"{CLAW_CLOUD_URL}/signin"
 DEVICE_VERIFY_WAIT = 30  # Mobile验证 默认等 30 秒
-TWO_FACTOR_WAIT = int(os.environ.get("TWO_FACTOR_WAIT", "120"))  # 2FA验证 默认等 120 秒
+TWO_FACTOR_WAIT = int(os.environ.get("TWO_FACTOR_WAIT", "60"))  # 2FA验证 默认等 60 秒
 
 
 class Telegram:
