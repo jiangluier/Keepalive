@@ -1,12 +1,13 @@
 import os
+import re
 import sys
 import asyncio
 import requests
+import traceback
 from telethon import TelegramClient
 from telethon.tl.custom.message import Message
 from telethon.sessions import StringSession
 from typing import Dict, Any, Tuple
-import re
 
 # Windows事件循环策略，兼容win系统运行
 if sys.platform == 'win32':
@@ -178,6 +179,7 @@ async def check_in():
             log('red', 'error', "发送 /checkin 后未收到目标机器人的回复")
 
     except Exception as e:
+        traceback.print_exc()
         err_msg = f"连接或执行过程中出现严重错误: {type(e).__name__} - {str(e)}"
         log('red', 'error', err_msg)
         status = "失败"
