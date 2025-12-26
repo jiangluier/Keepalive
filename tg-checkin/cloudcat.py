@@ -21,7 +21,7 @@ TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')      # 你的通知机器人 Token
 TG_CHAT_ID = os.getenv('TG_CHAT_ID')          # 你的个人或群组 Chat ID
 TG_CHANNEL = '@cloudcatgroup'                 # 签到目标频道用户名, 格式: @username
 CHANNEL_BOT_ID = 7694509436                   # 签到目标频道签到机器人的 ID
-CHECK_WAIT_TIME = 8                           # 等待机器人回复的时间（秒）
+CHECK_WAIT_TIME = 10                          # 等待机器人回复的时间（秒）
 DEFAULT_GAINED_POINTS = "未知"                # 获得积分的默认值
 DEFAULT_TOTAL_POINTS = "未知"                 # 当前总分的默认值
 # ============================================
