@@ -124,13 +124,23 @@ async def main():
         return
 
     if TG_SESSION_STR:
-        client = TelegramClient(StringSession(TG_SESSION_STR), TG_API_ID, TG_API_HASH)
+        client = TelegramClient(StringSession(TG_SESSION_STR), int(TG_API_ID), TG_API_HASH)
     else:
         log('red', 'error', "未检测到 TG_SESSION_STR 环境变量或变量为空")
         log('yellow', 'warning', "请先运行转换脚本获取 Session 字符串，并配置到环境变量中")
         sys.exit(1)
 
-    info = {'status': '失败', 'gained': '0 GB', 'vm_info': '暂无数据'}
+    info = {
+        'user': '未知',
+        'status': '失败',
+        'gained': '未知',
+        'streak': '未知',
+        'total': '未知',
+        'used': '未知',
+        'remaining': '未知',
+        'vm_count': '未知',
+        'vm_info': '未知'
+    }
 
     try:
         await client.connect()
@@ -185,14 +195,18 @@ async def main():
                 log('yellow', 'warning', "虚拟机列表获取失败")
 
         log('green', 'check', "任务执行完毕!")
-        send_tg_notification(info)
 
     except Exception as e:
         log('red', 'error', f"严重错误: {str(e)}")
         traceback.print_exc()
+        info['status'] = f"❌ 运行失败: {type(e).__name__}"
     finally:
-        await client.disconnect()
-        log('cyan', 'arrow', "连接已断开")
+        if client.is_connected():
+            await client.disconnect()
+            log('cyan', 'arrow', "连接已断开")
+        send_tg_notification(info)
+        if not any(k in info['status'] for k in ["成功", "已签"]):
+            sys.exit(1)
 
 if __name__ == '__main__':
     log('cyan', 'arrow', "=== 开始执行 ICMP9 自动签到脚本 ===")
