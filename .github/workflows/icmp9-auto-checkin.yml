@@ -2,11 +2,8 @@ name: icmp9.com 自动签到
 
 on:
   workflow_dispatch:
-  #schedule:
-  #  - cron: '10 0 * * *' # cron 格式: 分 时 日 月 周
-  workflow_run:
-    workflows: ["CloudCat TG 频道自动签到"]
-    types: [completed]
+  schedule:
+    - cron: '20 0 * * *' # cron 格式: 分 时 日 月 周
 
 jobs:
   tg_checkin:
