@@ -126,8 +126,8 @@ async def main():
     if TG_SESSION_STR:
         client = TelegramClient(StringSession(TG_SESSION_STR), TG_API_ID, TG_API_HASH)
     else:
-        print("\n❌ 错误：未检测到 TG_SESSION_STR 环境变量或变量为空")
-        print("请先运行转换脚本获取 Session 字符串，并将其配置到环境变量中")
+        log('red', 'error', "未检测到 TG_SESSION_STR 环境变量或变量为空")
+        log('yellow', 'warning', "请先运行转换脚本获取 Session 字符串，并配置到环境变量中")
         sys.exit(1)
 
     info = {'status': '失败', 'gained': '0 GB', 'vm_info': '暂无数据'}
