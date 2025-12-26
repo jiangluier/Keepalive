@@ -54,7 +54,7 @@ def send_tg_notification(data: Dict[str, str]):
     except Exception as e:
         log('red', 'error', f"TG 通知发送失败: {e}")
 
-def parse_all_info(text: str, current_data: Dict[str, str], parse_user: bool = False) -> Dict[str, str]:
+def parse_all_info(text: str, current_data: Dict[str, str], parse_user: bool = False, parse_gained: bool = False) -> Dict[str, str]:
     if parse_user:
         user_match = re.search(r'📊\s*([^\n\r]+)', text)
         if user_match:
