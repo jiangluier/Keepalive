@@ -121,13 +121,13 @@ class SecretUpdater:
     """GitHub Secret 更新器"""
     
     def __init__(self):
-        self.token = os.environ.get('REPO_TOKEN')
+        self.token = os.environ.get('GH_TOKEN')
         self.repo = os.environ.get('GITHUB_REPOSITORY')
         self.ok = bool(self.token and self.repo)
         if self.ok:
             print("✅ Secret 自动更新已启用")
         else:
-            print("⚠️ Secret 自动更新未启用（需要 REPO_TOKEN）")
+            print("⚠️ Secret 自动更新未启用（需要 GH_TOKEN）")
     
     def update(self, name, value):
         if not self.ok:
@@ -239,7 +239,6 @@ class AutoLogin:
         """等待设备验证"""
         self.log(f"需要设备验证，等待 {DEVICE_VERIFY_WAIT} 秒...", "WARN")
         self.shot(page, "设备验证")
-        
         self.tg.send(f"""⚠️ <b>需要设备验证</b>
 
 请在 {DEVICE_VERIFY_WAIT} 秒内批准：
@@ -287,7 +286,6 @@ class AutoLogin:
         # 不要频繁 reload，避免把流程刷回登录页
         for i in range(TWO_FACTOR_WAIT):
             time.sleep(1)
-            
             url = page.url
             
             # 如果离开 two-factor 流程页面，认为通过
