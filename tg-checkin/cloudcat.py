@@ -84,11 +84,11 @@ def parse_points_from_message(message_text: str, is_points_command_reply: bool) 
         total_match = re.search(r'(?:当前积分[:：]|current points:\s*)(\d+\.?\d*)\s?⭐', message_text, re.IGNORECASE)
 
     if gained_match:
-        gained_points = f"{gained_match.group(1)}⭐"
+        gained_points = f"{gained_match.group(1)} ⭐"
     if total_match:
         try:
             total_score = float(total_match.group(1))
-            total_points = f"{int(total_score)}⭐"  # 转换为整数并添加⭐
+            total_points = f"{int(total_score)} ⭐"
         except ValueError:
             pass
 
