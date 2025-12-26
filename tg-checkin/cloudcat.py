@@ -19,8 +19,8 @@ TG_API_HASH = os.getenv('TG_API_HASH')
 TG_SESSION_STR = os.getenv('TG_SESSION_STR')
 TG_BOT_TOKEN = os.getenv('TG_BOT_TOKEN')      # 你的通知机器人 Token
 TG_CHAT_ID = os.getenv('TG_CHAT_ID')          # 你的个人或群组 Chat ID
-TG_CHANNEL = '@cloudcatgroup'                 # 签到目标频道用户名, 格式: @username
-CHANNEL_BOT_ID = 7694509436                   # 签到目标频道签到机器人的 ID
+TG_CHANNEL = '@cloudcatgroup'                 # 签到目标频道名, 格式: @username
+TARGET_BOT_USERNAME = '@CloudCatOfficialBot'  # 签到机器人用户名, 格式: @username
 CHECK_WAIT_TIME = 10                          # 等待机器人回复的时间（秒）
 DEFAULT_GAINED_POINTS = "未知"                # 获得积分的默认值
 DEFAULT_TOTAL_POINTS = "未知"                 # 当前总分的默认值
@@ -87,8 +87,7 @@ def parse_points_from_message(message_text: str, is_points_command_reply: bool) 
         gained_points = f"{gained_match.group(1)} ⭐"
     if total_match:
         try:
-            total_score = float(total_match.group(1))
-            total_points = f"{int(total_score)} ⭐"
+            total_points = f"{int(float(total_match.group(1)))} ⭐"
         except ValueError:
             pass
 
@@ -96,19 +95,18 @@ def parse_points_from_message(message_text: str, is_points_command_reply: bool) 
 
 
 # 等待并获取目标机器人最新回复
-async def get_bot_reply(client: TelegramClient, channel_entity: Any, check_limit: int, min_id: int = 0) -> Message | None:
-    log('cyan', 'arrow', f"等待 {CHECK_WAIT_TIME} 秒后开始查找机器人回复...")
+async def get_bot_reply(client: TelegramClient, channel_entity: Any, check_limit: int, target_bot_id: int, min_id: int = 0) -> Message | None:
+    log('cyan', 'arrow', f"等待 {CHECK_WAIT_TIME} 秒后查找机器人回复...")
     await asyncio.sleep(CHECK_WAIT_TIME)
+    
     log('cyan', 'arrow', f"开始查找最近 {check_limit} 条消息...")
     message_count = 0
 
     async for msg in client.iter_messages(channel_entity, limit=check_limit):
-        if isinstance(msg, Message) and msg.sender_id == CHANNEL_BOT_ID:
+        if isinstance(msg, Message) and msg.sender_id == target_bot_id:
             if msg.id > min_id:
-                log('green', 'check', f"找到目标机器人新回复 (ID: {msg.id})")
+                log('green', 'check', f"找到来自 {TARGET_BOT_USERNAME} 的回复")
                 return msg
-    
-    log('yellow', 'warning', "未找到目标机器人的新回复")
     return None
 
 
@@ -141,35 +139,40 @@ async def check_in():
             log('red', 'error', "tg_session 已失效, 请更新环境变量 TG_SESSION_STR")
             return
 
+        # 获取频道对象
         channel_entity = await client.get_entity(TG_CHANNEL)
         log('cyan', 'arrow', f"已成功连接频道：{channel_entity.title}")
 
-        # 先发送 /checkin 直接签到
-        log('cyan', 'arrow', "发送 /checkin 命令进行签到")
+        # 动态获取机器人 ID
+        target_bot_entity = await client.get_entity(TARGET_BOT_USERNAME)
+        current_bot_id = target_bot_entity.id
+        log('green', 'check', f"已成功获取签到机器人ID: {current_bot_id}")
+        
+        # 发送签到指令 /checkin
+        log('cyan', 'arrow', "发送 /checkin 签到")
         sent_msg = await client.send_message(channel_entity, '/checkin')
-        checkin_reply = await get_bot_reply(client, channel_entity, check_limit, min_id=sent_msg.id)
 
-        if checkin_reply and checkin_reply.text:
-            reply_text = checkin_reply.text
-            log('green', 'check', f"收到 /checkin 回复，内容:\n{reply_text}")
+        # 获取机器人回复
+        reply = await get_bot_reply(client, channel_entity, check_limit, current_bot_id, min_id=sent_msg.id)
+        if reply and reply.text:
+            log('green', 'check', f"收到 /checkin 回复，内容:\n{reply.text}")
 
             # 检查是否签到成功
-            if any(keyword in reply_text for keyword in ['成功', 'successful']):
+            if any(keyword in reply.text for keyword in ['成功', 'successful']):
                 status = "成功"
-                log('green', 'check', "判断为：签到成功")
-                gained_points, total_points = parse_points_from_message(reply_text, False)
+                log('green', 'check', "签到成功")
+                gained_points, total_points = parse_points_from_message(reply.text, False)
 
             # 检查是否已签到
-            elif any(keyword in reply_text for keyword in ['已经签到过了', '今天已经签到', '今日已签到']):
+            elif any(keyword in reply.text for keyword in ['已经签到过了', '今天已经签到', '今日已签到']):
                 status = "今日已签到"
-                log('yellow', 'warning', "判断为：今日已签到，发送 /points 获取积分详情")
+                log('yellow', 'warning', "今日已签到，发送 /points 获取积分详情")
                 sent_points_msg = await client.send_message(channel_entity, '/points')
-                points_reply = await get_bot_reply(client, channel_entity, check_limit, min_id=sent_points_msg.id)
-           
+                
+                points_reply = await get_bot_reply(client, channel_entity, check_limit, current_bot_id, min_id=sent_points_msg.id)
                 if points_reply and points_reply.text:
-                    points_text = points_reply.text
-                    log('green', 'check', f"收到 /points 回复，内容:\n{points_text}")
-                    gained_points, total_points = parse_points_from_message(points_text, True)
+                    log('green', 'check', f"收到 /points 回复，内容:\n{points_reply.text}")
+                    gained_points, total_points = parse_points_from_message(points_reply.text, True)
                 else:
                     log('red', 'error', "发送 /points 后未收到机器人回复")
             else:
@@ -177,7 +180,7 @@ async def check_in():
                 log('red', 'error', "未找到预期的签到成功或已签到关键词")
         else:
             status = "失败"
-            log('red', 'error', "发送 /checkin 后未收到目标机器人的回复")
+            log('red', 'error', "发送 /checkin 后未收到机器人回复")
 
     except Exception as e:
         traceback.print_exc()
