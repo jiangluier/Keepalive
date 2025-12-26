@@ -71,32 +71,26 @@ def parse_all_info(text: str, current_data: Dict[str, str], parse_user: bool = F
         gained = re.search(r'(\d+(?:\.\d+)?)\s*(GB|MB|KB|B)', text, re.I)
         if gained:
             current_data['gained'] = f"{gained.group(1)} {gained.group(2).upper()}"
-            log('green', 'check', f"解析到今日获得的流量: {current_data['gained']}")
 
     streak = re.search(r'连续签到[：:\s]+(\d+)', text)
     if streak:
         current_data['streak'] = f"{streak.group(1)} 天"
-        log('green', 'check', f"解析到连续签到时间: {current_data['streak']}")
 
     quota = re.search(r'配额[：:\s]+([\d\.]+\s*[GMB]+)', text)
     if quota:
         current_data['total'] = quota.group(1)
-        log('green', 'check', f"解析到总流量配额: {current_data['total']}")
 
     used = re.search(r'已用[：:\s]+([\d\.]+\s*[GMB]+)', text)
     if used:
         current_data['used'] = used.group(1)
-        log('green', 'check', f"解析到已使用的流量: {current_data['used']}")
 
     rem = re.search(r'剩余[：:\s]+([\d\.]+\s*[GMB]+)', text)
     if rem:
         current_data['remaining'] = rem.group(1)
-        log('green', 'check', f"解析到剩余流量: {current_data['remaining']}")
 
     vms = re.search(r'虚机[：:\s]+(\d+)', text)
     if vms:
         current_data['vm_count'] = f"{vms.group(1)} 台"
-        log('green', 'check', f"解析到虚拟机数量: {current_data['vm_count']}")
 
     return current_data
 
