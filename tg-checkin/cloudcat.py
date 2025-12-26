@@ -2,7 +2,7 @@ import os
 import re
 import sys
 import asyncio
-import requests
+import requests  # type: ignore
 import traceback
 from telethon import TelegramClient
 from telethon.tl.custom.message import Message
@@ -46,7 +46,7 @@ def send_tg_notification(status: str, gained: str, total: str):
         return
 
     channel_link = TG_CHANNEL.replace('@', 't.me/') if TG_CHANNEL.startswith('@') else TG_CHANNEL  # 构造频道链接
-    status_emoji = "✅" if status == "成功" else ("⭐" if status == "今日已签到" else "❌")  # 状态 Emoji
+    status_emoji = "✅" if status == "成功" else ("ℹ️" if status == "今日已签到" else "❌")  # 状态 Emoji
     notification_text = (
         f"🎉 *Cloud Cat 签到通知* 🎉\n"
         f"====================\n"
@@ -180,19 +180,23 @@ async def check_in():
 
     except Exception as e:
         traceback.print_exc()
-        err_msg = f"连接或执行过程中出现严重错误: {type(e).__name__} - {str(e)}"
+        err_msg = f"严重错误: {type(e).__name__} - {str(e)}"
         log('red', 'error', err_msg)
-        status = "失败"
+        status = "错误"
     finally:
         if client.is_connected():
             await client.disconnect()
             log('cyan', 'arrow', "连接已安全断开")
         # === 最终通知 ===
         send_tg_notification(status, gained_points, total_points)
-        log('green', 'check', "任务结束")
-        if status == "失败":
+        log('green', 'check', "任务执行完毕! 结果统计：")
+        log('cyan', 'arrow', f"最终状态: {status}")
+        log('cyan', 'arrow', f"今日获得: {gained_points}")
+        log('cyan', 'arrow', f"当前总分: {total_points}")
+
+        if any(k in status for k in ["失败", "错误"]):
             sys.exit(1)
 
 if __name__ == '__main__':
-    log('cyan', 'arrow', "开始执行频道签到任务")
+    log('cyan', 'arrow', "=== 执行 CloudCat 签到任务 ===")
     asyncio.run(check_in())
