@@ -34,10 +34,15 @@ jobs:
       run: python -u tg-checkin/cloudcat.py
       continue-on-error: true
 
+    - name: ⏳ 等待 30 秒
+      run: sleep 30
+
     - name: 🚀 执行 SheerID 自动签到
       run: python -u tg-checkin/sheerid.py
       continue-on-error: true
 
+    - name: ⏳ 等待 30 秒
+      run: sleep 30
+
     - name: 🚀 执行 icmp9 自动签到
       run: python -u tg-checkin/icmp9.py
-    
