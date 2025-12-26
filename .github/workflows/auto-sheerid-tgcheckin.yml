@@ -31,4 +31,4 @@ jobs:
         pip install -r tg-checkin/requirements.txt
         
     - name: 🚀 执行 TG 频道签到脚本
-      run: python -u tg-checkin/auto-sheerid.py
+      run: python -u tg-checkin/sheerid.py
