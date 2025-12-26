@@ -2,11 +2,8 @@ name: Auto SheerID 自动签到
 
 on:
   workflow_dispatch:
-  #schedule:
-  #  - cron: '10 0 * * *' # cron 格式: 分 时 日 月 周
-  workflow_run:
-    workflows: ["CloudCat TG 频道自动签到"]
-    types: [completed]
+  schedule:
+    - cron: '10 0 * * *' # cron 格式: 分 时 日 月 周
 
 jobs:
   tg_checkin:
@@ -15,6 +12,7 @@ jobs:
     env:
       TG_API_ID: ${{ secrets.TG_API_ID }}
       TG_API_HASH: ${{ secrets.TG_API_HASH }}
+      TG_SESSION_STR: ${{ secrets.TG_SESSION_STR }}
       TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
       TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
 
