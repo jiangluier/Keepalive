@@ -33,5 +33,5 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r tg-checkin/requirements.txt
         
-    - name: 🚀 执行 TG 频道签到脚本
-      run: python -u tg-checkin/icmp9-checkin.py
+    - name: 🚀 执行 icmp9 自动签到
+      run: python -u tg-checkin/icmp9.py
