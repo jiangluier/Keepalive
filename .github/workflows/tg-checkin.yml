@@ -28,7 +28,7 @@ jobs:
     - name: 📦 安装 Python 依赖
       run: |
         python -m pip install --upgrade pip
-        if [ -f tg-checkin/requirements.txt ]; then pip install -r tg-checkin/requirements.txt; fi
+        pip install -r tg-checkin/requirements.txt
         
     - name: 🚀 执行 CloudCat 自动签到
       run: python -u tg-checkin/cloudcat.py
