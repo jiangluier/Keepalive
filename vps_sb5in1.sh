@@ -140,6 +140,40 @@ get_realip() {
     fi
 }
 
+# 获取IP的国家和ISP信息
+get_isp_info() {
+    local target_ip=$1
+    local clean_ip=$(echo "$target_ip" | tr -d '[]')    
+    local providers=(
+        "https://ipinfo.io/${clean_ip}/json"
+        "http://ip-api.com/line/${clean_ip}?fields=status,countryCode,isp"
+    )
+    local isp="Unknow"
+
+    for provider in "${providers[@]}"; do
+        if [[ "$provider" == *"ipinfo.io"* ]]; then
+            ip_data=$(curl -s --max-time 3 "$provider")
+            if [ $? -eq 0 ] && [[ "$ip_data" == *"country"* ]]; then
+                country=$(echo "$ip_data" | jq -r '.country' 2>/dev/null || echo "UN")
+                raw_org=$(echo "$ip_data" | jq -r '.org' 2>/dev/null || echo "Unknown")
+                isp_name=$(echo "$raw_org" | sed -E 's/^AS[0-9]+ //g')
+                isp=$(echo "${country}-${isp_name}" | sed 's/ /_/g')
+                break
+            fi
+        else
+            res=$(curl -s --max-time 3 "$provider")
+            if [ $? -eq 0 ] && [ "$(echo "$res" | sed -n '1p')" = "success" ]; then
+                country=$(echo "$res" | sed -n '2p')
+                isp_name=$(echo "$res" | sed -n '3p')
+                isp=$(echo "${country}-${isp_name}" | sed 's/ /_/g')
+                break
+            fi
+        fi
+        yellow "接口响应超时或解析失败，尝试下一个..."
+    done
+    echo "$isp"
+}
+
 # 处理防火墙
 allow_port() {
     has_ufw=0
@@ -513,10 +547,12 @@ EOF
 
 # 生成节点
 get_info() {  
+  clear
   yellow "\nip检测中,请稍等...\n"
   server_ip=$(get_realip)
-  clear
-  isp=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F\" '{print $26"-"$18}' | sed -e 's/ /_/g' || echo "vps")
+  green "检测到当前 IP: $server_ip"
+  isp=$(get_isp_info "$server_ip")
+  green "检测到当前 ISP: $isp"
 
   if [ -f "${work_dir}/argo.log" ]; then
       for i in {1..5}; do
@@ -548,9 +584,9 @@ socks5://${socks_user}:${socks_pass}@${server_ip}:${socks_port}#${isp}
 
 EOF
 
-echo ""
-while IFS= read -r line; do echo -e "${purple}$line"; done < ${work_dir}/url.txt
-yellow "\n注意：需打开代理软件的 "跳过证书验证" 选项\n"
+	echo ""
+	while IFS= read -r line; do echo -e "${purple}$line"; done < ${work_dir}/url.txt
+	yellow "\n注意：需打开代理软件的 "跳过证书验证" 选项\n"
 }
 
 # 通用服务管理函数
