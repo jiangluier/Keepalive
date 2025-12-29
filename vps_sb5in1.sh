@@ -270,7 +270,7 @@ install_singbox() {
     public_key=$(echo "${output}" | awk '/PublicKey:/ {print $2}')
 
     # 放行端口
-    allow_port $vless_port/tcp $socks5_port/tcp $tuic_port/udp $hy2_port/udp > /dev/null 2>&1
+    allow_port $vless_port/tcp $socks_port/tcp $tuic_port/udp $hy2_port/udp > /dev/null 2>&1
 
     # 生成自签名证书
     openssl ecparam -genkey -name prime256v1 -out "${work_dir}/private.key"
@@ -556,7 +556,7 @@ get_info() {
 
   if [ -f "${work_dir}/argo.log" ]; then
       for i in {1..5}; do
-          purple "第 $i 次尝试获取ArgoDoamin中..."
+          purple "\n第 $i 次尝试获取ArgoDoamin中..."
           argodomain=$(sed -n 's|.*https://\([^/]*trycloudflare\.com\).*|\1|p' "${work_dir}/argo.log")
           [ -n "$argodomain" ] && break
           sleep 2
