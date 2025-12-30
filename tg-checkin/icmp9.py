@@ -178,7 +178,6 @@ async def main():
                     clean_text = clean_text.split("虚拟机列表")[-1]
                 clean_text = clean_text.strip()
                 info['vm_info'] = clean_text if clean_text else "您当前没有虚拟机"
-                log('green', 'check', f"虚拟机列表: {info['vm_info']}")
             else:
                 log('yellow', 'warning', "虚拟机列表获取失败")
 
@@ -200,7 +199,7 @@ async def main():
         log('cyan', 'arrow', f"当前总配额: {info['total']}")
         log('cyan', 'arrow', f"已用配额: {info['used']}")
         log('cyan', 'arrow', f"剩余配额: {info['remaining']}")
-        log('cyan', 'arrow', f"虚机详情: {info['vm_info']}")
+        log('cyan', 'arrow', f"虚机列表: {info['vm_info']}")
 
         if not any(k in info['status'] for k in ["成功", "已签"]):
             sys.exit(1)
