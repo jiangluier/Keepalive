@@ -51,10 +51,16 @@ def send_tg_notification(data: Dict[str, str]):
     )
 
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+    payload: Dict[str, Any] = {
+        'chat_id': TG_CHAT_ID,
+        'text': text,
+        'parse_mode': 'Markdown'
+    }
+
     try:
-        requests.post(url, data={'chat_id': TG_CHAT_ID, 'text': text, 'parse_mode': 'Markdown'}, timeout=15).raise_for_status()
+        requests.post(url, data=payload, timeout=10).raise_for_status()
         log('green', 'check', "TG 通知已发送")
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         log('red', 'error', f"TG 通知发送失败: {e}")
 
 
