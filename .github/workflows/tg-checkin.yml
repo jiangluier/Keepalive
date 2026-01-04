@@ -43,14 +43,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r tg-checkin/requirements.txt
         
-    - name: 🚀 执行 CloudCat 自动签到
-      if: env.RUN_TARGET == 'All' || env.RUN_TARGET == 'CloudCat'
-      run: python -u tg-checkin/cloudcat.py
-      continue-on-error: true
+    #- name: 🚀 执行 CloudCat 自动签到
+    #  if: env.RUN_TARGET == 'All' || env.RUN_TARGET == 'CloudCat'
+    #  run: python -u tg-checkin/cloudcat.py
+    #  continue-on-error: true
 
-    - name: ⏳ 等待 (仅在 All 模式下)
-      if: env.RUN_TARGET == 'All'
-      run: sleep 30
+    #- name: ⏳ 等待 (仅在 All 模式下)
+    #  if: env.RUN_TARGET == 'All'
+    #  run: sleep 30
 
     - name: 🚀 执行 SheerID 自动签到
       if: env.RUN_TARGET == 'All' || env.RUN_TARGET == 'SheerID'
