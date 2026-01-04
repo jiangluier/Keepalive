@@ -10,7 +10,7 @@ on:
         type: choice
         options:
           - All
-          - CloudCat
+          #- CloudCat
           - SheerID
           - ICMP9
   schedule:
